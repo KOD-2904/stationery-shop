@@ -1,10 +1,6 @@
 services:
-  mysql:
-    image: 'mysql:latest'
-    environment:
-      - 'MYSQL_DATABASE=mydatabase'
-      - 'MYSQL_PASSWORD=secret'
-      - 'MYSQL_ROOT_PASSWORD=verysecret'
-      - 'MYSQL_USER=myuser'
+  redis:
+    image: redis:8.4
+    container_name: redis
     ports:
-      - '3306'
+      - "6380:6379"
