@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stationery_shop.dto.request.LoginRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
+import org.example.stationery_shop.dto.response.AuthResponse;
 import org.example.stationery_shop.entity.auth.User;
 import org.example.stationery_shop.service.auth.AuthService;
 import org.example.stationery_shop.service.serviceImpl.auth.AuthServiceImpl;
@@ -20,15 +21,15 @@ public class AuthController {
     private final AuthServiceImpl authService;
 
     @PostMapping("/login")
-    public ApiResponse<?> login(
+    public ApiResponse<AuthResponse> login(
             @Valid @RequestBody LoginRequest loginRequest,
             HttpServletRequest httpServletRequest) {
         authService.login(loginRequest, httpServletRequest.getRemoteAddr());
 
-        return ApiResponse.<User>builder()
+        return ApiResponse.<AuthResponse>builder()
                 .code(200)
                 .message("Login successful")
-                //.result(user)
+                .result(authService.login(loginRequest, httpServletRequest.getRemoteAddr()))
                 .build();
     }
 }

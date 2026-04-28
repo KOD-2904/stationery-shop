@@ -1,0 +1,243 @@
+package org.example.stationery_shop.security.jwt;
+
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.SignatureException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.example.stationery_shop.dto.response.ApiResponse;
+import org.example.stationery_shop.exception.AppException;
+import org.example.stationery_shop.exception.ErrorCode;
+import org.example.stationery_shop.security.user.UserDetailServiceImpl;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+import tools.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    private final JwtService jwtService;
+    //private final UserDetailServiceImpl userDetailService;
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+
+        String jwtToken = getTokenFromRequest(request);
+
+        // 1. Không có token → đi tiếp luôn
+        if (jwtToken == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        try {
+            var claims = jwtService.parseToken(jwtToken).getBody();
+
+            String tokenType = claims.get("tokenType", String.class);
+            String requestPath = request.getServletPath();
+
+            // 2. Refresh endpoint
+            if ("/api/auth/refresh".equals(requestPath)
+                    && "POST".equalsIgnoreCase(request.getMethod())) {
+
+                if (!"REFRESH".equals(tokenType)) {
+                    throw new AppException(ErrorCode.TOKEN_MUST_BE_REFRESH);
+                }
+                // ❗ refresh không set authentication
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            // 3. Các endpoint khác → ACCESS token
+            if (!"ACCESS".equals(tokenType)) {
+                throw new AppException(ErrorCode.TOKEN_MUST_BE_ACCESS);
+            }
+            // đoạn này có 2 hướng: 1. statless _ dùng jwt full, tức là hiện tại đang làm là
+//                //nhét role và permission vào token luôn, tất hiên sẽ cso trade - off là:
+//                //User bị revoke quyền → token cũ vẫn còn hiệu lực
+//                //Permission thay đổi → phải chờ token expire
+//                //2. không bỏ role và permission vào token, nen mõi request sẽ load user từ DB để láy authority
+//                // ưu điểm là authority có hiệu lực ngay lập tức
+//                //nhưng đánh đổi là mõi request lại một lần gọi DB không stateless
+//
+//                // Set authentication cho access token
+//                String username = claims.getSubject();
+//                UserDetails userDetails = userDetailService.loadUserByUsername(username);
+//                UsernamePasswordAuthenticationToken authToken =
+//                        new UsernamePasswordAuthenticationToken(
+//                                userDetails,
+//                                null,
+//                                userDetails.getAuthorities()
+//                        );
+//                //SecurityContextHolder.getContext().setAuthentication(authToken);
+//                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+//                if (SecurityContextHolder.getContext().getAuthentication() == null) {
+//                    SecurityContextHolder.getContext().setAuthentication(authToken);
+//                }
+
+            // 4. Build Authentication
+            List<String> roles = claims.get("roles", List.class);
+            List<String> permissions = claims.get("permissions", List.class);
+
+            if (roles == null) roles = new ArrayList<>();
+            if (permissions == null) permissions = new ArrayList<>();
+
+            List<GrantedAuthority> authorities = new ArrayList<>();
+
+            roles.forEach(r -> authorities.add(new SimpleGrantedAuthority(r)));
+            permissions.forEach(p -> authorities.add(new SimpleGrantedAuthority(p)));
+
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(
+                            claims.getSubject(),
+                            null,
+                            authorities
+                    );
+
+            authToken.setDetails(
+                    new WebAuthenticationDetailsSource().buildDetails(request)
+            );
+
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
+
+            filterChain.doFilter(request, response);
+            return;
+
+        } catch (ExpiredJwtException e) {
+            handleJwtError(response, ErrorCode.TOKEN_EXPIRED);
+        } catch (SignatureException | MalformedJwtException |
+                 UnsupportedJwtException | IllegalArgumentException e) {
+            handleJwtError(response, ErrorCode.NOT_VALID_TOKEN);
+        } catch (AppException e) {
+            handleJwtError(response, e.getErrorCode());
+        }
+    }
+//    @Override
+//    protected void doFilterInternal(HttpServletRequest request,
+//                                    HttpServletResponse response,
+//                                    FilterChain filterChain) throws ServletException, IOException {
+//        String jwtToken = getTokenFromRequest(request);
+//        if (jwtToken == null) {
+//            filterChain.doFilter(request, response);
+//            return;
+//        }
+//
+//
+//        try {
+//            var claims = jwtService.parseToken(jwtToken).getBody();
+//
+//            String jti = claims.getId();
+//
+//            String tokenType = claims.get("tokenType", String.class);
+//            String requestPath = request.getServletPath();
+//
+//            if ("/api/auth/refresh".equals(requestPath) &&
+//                    "POST".equalsIgnoreCase(request.getMethod())) {
+//                // Endpoint refresh chỉ chấp nhận refresh token
+//                if (!"REFRESH".equals(tokenType)) {
+//                    log.info("Token type {} not supported for this end point", tokenType);
+//                    throw new AppException(ErrorCode.TOKEN_MUST_BE_REFRESH);
+//                }
+//                // Cho refresh token qua mà không set authentication
+//                filterChain.doFilter(request, response);
+//                return;
+//            } else {
+//                // Các endpoint khác chỉ chấp nhận access token
+//                if (!"ACCESS".equals(tokenType)) {
+//                    log.info("Refresh token used for non-refresh endpoint");
+//                    throw new AppException(ErrorCode.TOKEN_MUST_BE_ACCESS);
+//                }
+//
+//                // đoạn này có 2 hướng: 1. statless _ dùng jwt full, tức là hiện tại đang làm là
+//                //nhét role và permission vào token luôn, tất hiên sẽ cso trade - off là:
+//                //User bị revoke quyền → token cũ vẫn còn hiệu lực
+//                //Permission thay đổi → phải chờ token expire
+//                //2. không bỏ role và permission vào token, nen mõi request sẽ load user từ DB để láy authority
+//                // ưu điểm là authority có hiệu lực ngay lập tức
+//                //nhưng đánh đổi là mõi request lại một lần gọi DB không stateless
+//
+//                // Set authentication cho access token
+////                String username = claims.getSubject();
+////                UserDetails userDetails = userDetailService.loadUserByUsername(username);
+////                UsernamePasswordAuthenticationToken authToken =
+////                        new UsernamePasswordAuthenticationToken(
+////                                userDetails,
+////                                null,
+////                                userDetails.getAuthorities()
+////                        );
+////                //SecurityContextHolder.getContext().setAuthentication(authToken);
+////                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+////                if (SecurityContextHolder.getContext().getAuthentication() == null) {
+////                    SecurityContextHolder.getContext().setAuthentication(authToken);
+////                }
+//                List<String> roles = Optional.ofNullable(claims.get("roles", List.class))
+//                        .orElse(new ArrayList<>());
+//                List<String> permissions = Optional.ofNullable(claims.get("permissions", List.class))
+//                        .orElse(new ArrayList<>());
+//
+//                List<GrantedAuthority> authorities = new ArrayList<>();
+//
+//                roles.forEach(role -> authorities.add(new SimpleGrantedAuthority(role)));
+//                permissions.forEach(permission -> authorities.add(new SimpleGrantedAuthority(permission)));
+//
+//                UsernamePasswordAuthenticationToken authToken =
+//                        new UsernamePasswordAuthenticationToken(
+//                               claims.getSubject(),
+//                               null,
+//                               authorities
+//                        );
+//                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+//                if (SecurityContextHolder.getContext().getAuthentication() == null) {
+//                    SecurityContextHolder.getContext().setAuthentication(authToken);
+//                }
+//
+//                filterChain.doFilter(request, response);
+//            }
+//        } catch (ExpiredJwtException e) {
+//            handleJwtError(response, ErrorCode.TOKEN_EXPIRED);
+//        } catch (SignatureException | MalformedJwtException |
+//                 IllegalArgumentException | UnsupportedJwtException e) {
+//            handleJwtError(response, ErrorCode.NOT_VALID_TOKEN);
+//        }
+//    }
+    private void handleJwtError(HttpServletResponse response, ErrorCode errorCode) throws IOException {
+        response.setStatus(errorCode.getStatusCode().value());
+        response.setContentType("application/json");
+
+        ApiResponse<?> apiResponse = ApiResponse.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .build();
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        response.getWriter().write(objectMapper.writeValueAsString(apiResponse));
+    }
+
+    private String getTokenFromRequest(HttpServletRequest request) {
+        String Header = request.getHeader("Authorization");
+        if (Header != null && Header.startsWith("Bearer ")) {
+            return Header.substring(7);
+        }
+        return null;
+    }
+}

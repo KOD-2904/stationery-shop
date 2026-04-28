@@ -10,5 +10,5 @@ import org.example.stationery_shop.validation.password.ValidPassword;
 @AllArgsConstructor
 @NoArgsConstructor
 public class RefreshTokenRequest {
-
+    private String email;
 }
