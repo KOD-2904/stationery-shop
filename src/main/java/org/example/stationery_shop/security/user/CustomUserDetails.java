@@ -29,7 +29,7 @@ public class CustomUserDetails implements UserDetails {
             for (Role role : user.getRoles()) {
                 // Thêm role với prefix ROLE_ (để dùng hasRole())
                 authorities.add(new SimpleGrantedAuthority(
-                        //"ROLE_" +  đoạn này lúc vừa khởi chạy sẽ tạo trước  ROlE là
+                        //"ROLE_" +  đoạn này lúc vừa khởi chạy app sẽ tạo trước  ROlE là
                         // ROLE_ADMIN, ROLE_STAFF, ROLE_USER nên có thể chưa cần  prefix
                                 role.getCode()));
 
