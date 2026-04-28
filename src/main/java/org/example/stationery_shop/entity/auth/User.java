@@ -6,6 +6,8 @@ import org.example.stationery_shop.entity.BaseEntity;
 import org.example.stationery_shop.enums.UserStatus;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -19,7 +21,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Getter
 @Setter
-public class UserAccount extends BaseEntity {
+@Builder
+public class User extends BaseEntity {
 
     @Column(name = "email", nullable = false, length = 255)
     private String email;
@@ -27,7 +30,7 @@ public class UserAccount extends BaseEntity {
     @Column(name = "password", nullable = true, length = 255) //null with Google login
     private String password;
 
-    @Column(name = "firstname", length = 255)
+    @Column(name = "name", length = 255)
     private String name; // get from google
 
     @Column(name = "phone", length = 20)
@@ -47,4 +50,15 @@ public class UserAccount extends BaseEntity {
     private boolean phoneVerified = false;
 
     private LocalDateTime lastLoginAt;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "user_role",
+            joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id"),
+            uniqueConstraints = {
+                    @UniqueConstraint(name = "pk_user_role", columnNames = {"user_id", "role_id"})
+            }
+    )
+    private Set<Role> roles = new HashSet<>();
 }
