@@ -1,6 +1,6 @@
 services:
   redis:
     image: redis:8.4
-    container_name: redis
+    container_name: redis-6382
     ports:
-      - "6380:6379"
+      - "6382:6379"

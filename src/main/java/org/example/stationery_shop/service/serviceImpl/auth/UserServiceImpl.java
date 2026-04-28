@@ -1,9 +1,8 @@
-package org.example.stationery_shop.service.serviceImpl;
+package org.example.stationery_shop.service.serviceImpl.auth;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.stationery_shop.dto.request.RegisterRequest;
-import org.example.stationery_shop.entity.auth.EmailVerifyToken;
 import org.example.stationery_shop.entity.auth.Role;
 import org.example.stationery_shop.entity.auth.User;
 import org.example.stationery_shop.enums.UserStatus;
@@ -12,15 +11,11 @@ import org.example.stationery_shop.exception.ErrorCode;
 import org.example.stationery_shop.repository.MailRepository;
 import org.example.stationery_shop.repository.RoleRepository;
 import org.example.stationery_shop.repository.UserRepository;
-import org.example.stationery_shop.service.UserService;
-import org.springframework.boot.mail.autoconfigure.MailProperties;
+import org.example.stationery_shop.service.auth.UserService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.HashSet;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +27,6 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final MailServiceImpl mailService;
-    private final MailProperties mailProperties;
     private final MailRepository mailRepository;
 
     @Override
@@ -54,17 +48,27 @@ public class UserServiceImpl implements UserService {
                 .build();
 
        var returnUser = userRepository.save(user);
-        String token = UUID.randomUUID().toString();
-        EmailVerifyToken emailVerifyToken = EmailVerifyToken.builder()
-                .token(token)
-                .user(returnUser)
-                .expiresAt(LocalDateTime.now().plus(Duration.ofMinutes(30)))
-                .used(false)
-                .build();
-        mailRepository.save(emailVerifyToken);
-        String link = baseUrl + "/auth/verify-email?token=" + token;
+       var emailVerifyToken = mailService.buildEmailVerifyToken(returnUser);
 
-        mailService.sendVerifyMail(registerRequest.getEmail(), link);
+        mailRepository.save(emailVerifyToken);
+        String link = baseUrl + "/auth/verify-user?token=" + emailVerifyToken.getToken();
+
+        mailService.sendMail(registerRequest.getEmail(), link);
         return user;
     }
+
+    @Override
+    public void verifyUser(String token) {
+        mailService.verifyMail(token);
+    }
+
+    @Override
+    public void resendVerifyToken(User user) {
+        var emailVerifyToken =  mailService.buildEmailVerifyToken(user);
+        mailRepository.save(emailVerifyToken);
+        String link = baseUrl + "/auth/verify-user?token=" + emailVerifyToken.getToken();
+        mailService.sendMail(user.getEmail(), link);
+    }
+
+
 }

@@ -27,12 +27,14 @@ public class EmailVerifyToken extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     User user;
 
-    @Column(name = "expires_at", nullable = false)
-    LocalDateTime expiresAt;
 
-    @Column(name = "used", nullable = false)
-    boolean used = false;
+
+    @Column(name = "expires_at", nullable = false) //tu doan nay tro xuong co the luoc bo
+    LocalDateTime expiresAt;
 
     @Column(name = "used_at")
     LocalDateTime usedAt;
+
+    @Column(name = "used", nullable = false)
+    boolean used = false;
 }

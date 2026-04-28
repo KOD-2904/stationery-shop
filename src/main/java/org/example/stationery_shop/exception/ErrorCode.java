@@ -7,7 +7,12 @@ import org.springframework.http.HttpStatusCode;
 @Getter
 public enum ErrorCode {
     EMAIL_EXISTED(10000, "Email da ton tai", HttpStatus.BAD_REQUEST),
-    ROLE_NOT_EXIST(10001, "Role cha ton tai" , HttpStatus.NOT_FOUND),;
+    ROLE_NOT_EXIST(10001, "Role cha ton tai" , HttpStatus.NOT_FOUND),
+    TOKEN_NOT_FOUND(10002, "Token khong ton tai" , HttpStatus.BAD_REQUEST),
+    TOKEN_ALREADY_USED(10003, "Token da duoc dung" , HttpStatus.BAD_REQUEST),
+    TOKEN_EXPIRED(10001, "Token da het han" , HttpStatus.BAD_REQUEST),
+    EMAIL_NOT_EXIST(10002, "Email khong ton tai" , HttpStatus.NOT_FOUND),
+    ;
 
     private final int code;
     private final String message;
