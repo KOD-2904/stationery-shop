@@ -32,4 +32,22 @@ public class AuthController {
                 .result(authService.login(loginRequest, httpServletRequest.getRemoteAddr()))
                 .build();
     }
+    @PostMapping("/login-google") //user loginbang google
+    public ApiResponse<AuthResponse> loginGoogle(
+            ) {
+        return ApiResponse.<AuthResponse>builder()
+                .code(200)
+                .message("Login successful")
+            //    .result(authService.login(loginRequest, httpServletRequest.getRemoteAddr()))
+                .build();
+    }
+    @PostMapping("/set-password") //set thêm password cho user truoc do login bang google
+    public ApiResponse<AuthResponse> setPasswordForGoogleUser(
+            ) {
+        return ApiResponse.<AuthResponse>builder()
+                .code(200)
+                .message("")
+                //.result(authService.login(loginRequest, httpServletRequest.getRemoteAddr()))
+                .build();
+    }
 }

@@ -1,6 +1,7 @@
 package org.example.stationery_shop.config;
 
 import lombok.RequiredArgsConstructor;
+import org.example.stationery_shop.security.google.OAuth2SuccessHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -19,9 +20,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 public class SecurityConfig {
     private final String[] PUBLIC_ENDPOINTS = {
-            "/api/auth/login", "/auth/token", "/auth/introspect", "/auth/log-out", "/auth/refreshToken", "/api/auth/register", "/auth/verify-email"
+            "/oauth2/**", "/api/auth/login", "/auth/token", "/auth/introspect", "/auth/log-out", "/auth/refreshToken", "/api/auth/register", "/auth/verify-email"
     };
-
+    private final OAuth2SuccessHandler oAuth2SuccessHandler;
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -35,6 +36,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorizeRequests -> {
                     authorizeRequests
                             .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS).permitAll()
+                            .requestMatchers(HttpMethod.GET, PUBLIC_ENDPOINTS).permitAll()
                             .requestMatchers(HttpMethod.GET, "/auth/verify-email").permitAll()
                             .requestMatchers(HttpMethod.GET, "/api/payment/**").permitAll()
                             .requestMatchers(HttpMethod.POST, "/api/payment/**").permitAll()
@@ -43,7 +45,10 @@ public class SecurityConfig {
 //                            .requestMatchers(HttpMethod.POST, "/auth/log-out").permitAll()
 //                            .requestMatchers(HttpMethod.GET, "/users").hasAuthority("ROLE_ADMIN")
                             .anyRequest().authenticated();
-                });
+                })
+                .oauth2Login(oAuth2Login -> oAuth2Login
+                        .successHandler(oAuth2SuccessHandler))
+        ;
 //                .oauth2ResourceServer(oauth2 -> oauth2
 //                        .jwt(jwt -> jwt
 //                                .jwtAuthenticationConverter(jwtConverter())

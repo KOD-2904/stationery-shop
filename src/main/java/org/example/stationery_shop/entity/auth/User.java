@@ -40,7 +40,15 @@ public class User extends BaseEntity {
     @Column(unique = true)
     private String googleId;           // ID từ Google (để biết user này từ Google)
 
-    private String provider;           // "google" hoặc "local"
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "user_provider",
+            joinColumns = @JoinColumn(name = "user_id")
+    )
+    @Column(name = "provider")
+    private Set<String> providers = new HashSet<>();         // "google" hoặc "local"
+//    @ElementCollection(fetch = FetchType.EAGER)   //nen can nhac
+//    private Set<String> providers = new HashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
