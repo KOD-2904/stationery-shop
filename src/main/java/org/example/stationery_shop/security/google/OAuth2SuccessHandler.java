@@ -1,29 +1,39 @@
 package org.example.stationery_shop.security.google;
 
+import io.jsonwebtoken.Jwt;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.stationery_shop.entity.auth.Role;
 import org.example.stationery_shop.entity.auth.User;
 import org.example.stationery_shop.enums.UserStatus;
+import org.example.stationery_shop.exception.AppException;
+import org.example.stationery_shop.exception.ErrorCode;
+import org.example.stationery_shop.repository.RoleRepository;
 import org.example.stationery_shop.repository.UserRepository;
+import org.example.stationery_shop.security.jwt.JwtProperties;
 import org.example.stationery_shop.security.jwt.JwtService;
+import org.example.stationery_shop.security.jwt.JwtTokenResult;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final JwtService jwtService;
+    private final JwtProperties jwtProperties;
     @Override
     public void onAuthenticationSuccess(
             HttpServletRequest request,
@@ -43,10 +53,11 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
             user = optionalUser.get();
 
-            // Nếu account local chưa link google
-            if(!user.getProviders().contains("google")) {
-                user.getProviders().add("google");
+            if (user.getProviders() == null) {
+                user.setProviders(new HashSet<>());
             }
+
+            user.getProviders().add("google");
 
             // Nếu chưa có googleId thì add
             if(user.getGoogleId() == null) {
@@ -61,11 +72,19 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             userRepository.save(user);
 
         } else {
+            HashSet<Role> roles = new HashSet<>();
+
+            Role roleUser = (Role) roleRepository.findByCode("ROLE_USER")
+                    .orElseThrow(() ->
+                            new AppException(ErrorCode.ROLE_NOT_EXIST));
+
+            roles.add(roleUser);
 
             user = User.builder()
                     .email(email)
                     .name(name)
                     .googleId(googleId)
+                    .roles(roles)
                     .status(UserStatus.ACTIVE)
                     .password(null)
                     .providers(new HashSet<>(Set.of("google")))
@@ -77,10 +96,29 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         log.info("sub : {}", googleId);
         log.info("email : {}", email);
 
-//        String token = jwtService.generateAccessToken();
-//        response.sendRedirect(
-//                "http://localhost:3000/oauth2/success?token=" + token
-//        );
+        String accessToken = jwtService.generateAccessToken(user);
+        JwtTokenResult jwtTokenResult = jwtService.generateRefreshTokenResult(user);
+        String refreshToken = jwtTokenResult.getToken();
+
+
+        // Access Token Cookie (15 phút)
+        Cookie accessCookie = new Cookie("accessToken", accessToken);
+        accessCookie.setHttpOnly(true);
+        accessCookie.setSecure(false); // true cho production
+        accessCookie.setPath("/");
+        accessCookie.setMaxAge(jwtProperties.getAccessTokenExpiration());
+
+        // Refresh Token Cookie (7 ngày)
+        Cookie refreshCookie = new Cookie("refreshToken", refreshToken);
+        refreshCookie.setHttpOnly(true);
+        refreshCookie.setSecure(false);
+        refreshCookie.setPath("/");
+        refreshCookie.setMaxAge(jwtProperties.getRefreshTokenExpiration());
+
+        response.addCookie(accessCookie);
+        response.addCookie(refreshCookie);
+
+        response.sendRedirect("http://localhost:3000/api/auth/oauth2/success");
 
     }
 }

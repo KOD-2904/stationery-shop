@@ -14,6 +14,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -42,13 +43,13 @@ public class MailServiceImpl implements MailService {
     }
 
     @Override
-    public void verifyMail(String token) {
+    public void  verifyMail(String token) {
         EmailVerifyToken evt = mailRepository.findByToken(token)
                 .orElseThrow(() -> new AppException(ErrorCode.TOKEN_NOT_FOUND));
 //        if (evt.isUsed()) {
 //            throw new AppException(ErrorCode.TOKEN_ALREADY_USED);
 //        }
-        if (evt.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (evt.getExpiresAt().isBefore(Instant.now())) {
             throw new AppException(ErrorCode.TOKEN_EXPIRED);
         }
 
@@ -62,7 +63,7 @@ public class MailServiceImpl implements MailService {
         return EmailVerifyToken.builder()
                 .token(token)
                 .user(user)
-                .expiresAt(LocalDateTime.now().plus(Duration.ofMinutes(30)))
+                .expiresAt(Instant.now().plus(Duration.ofMinutes(30)))
                 .used(false)
                 .build();
     }

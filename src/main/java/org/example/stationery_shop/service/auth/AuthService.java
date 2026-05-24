@@ -6,7 +6,7 @@ import org.example.stationery_shop.dto.request.RefreshTokenRequest;
 import org.example.stationery_shop.dto.response.AuthResponse;
 
 public interface AuthService {
-    AuthResponse login(LoginRequest loginRequest, String deviceIp);
-    void refreshToken(RefreshTokenRequest refreshTokenRequest, String deviceIp);
+    AuthResponse login(LoginRequest loginRequest, String ip, String device, String userAgent);
+    AuthResponse refreshToken(String token, String ip, String userAgent, String deviceIp);
     void logout(LogoutRequest logoutRequest);
 }

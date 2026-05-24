@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.stationery_shop.entity.auth.Permission;
 import org.example.stationery_shop.entity.auth.Role;
+import org.example.stationery_shop.entity.auth.User;
 import org.example.stationery_shop.exception.AppException;
 import org.example.stationery_shop.exception.ErrorCode;
 import org.example.stationery_shop.security.user.CustomUserDetails;
@@ -41,31 +42,43 @@ public class JwtService {
     public CustomUserDetails getUserDetails(Authentication authentication) {
         return (CustomUserDetails) authentication.getPrincipal();
     }
-    public String generateRefreshToken(Authentication authentication) {
-        var userDetails = getUserDetails(authentication);
-        if (userDetails == null) {
+    public JwtTokenResult generateRefreshTokenResultFromAuthentication(Authentication authentication) {
+        var user = getUserDetails(authentication).getUser();
+        if (user == null) {
             throw new AppException(ErrorCode.USER_DETAILS_IS_NULL);
         }
-
+        return generateRefreshTokenResult(user);
+    }
+    public JwtTokenResult generateRefreshTokenResult(User user) {
         Claims claims = buildClaims(
-                userDetails,
+                user,
                 "REFRESH",
                 jwtProperties.getRefreshTokenExpiration()
         );
-
-        return Jwts.builder()
+        String token = Jwts.builder()
                 .setClaims(claims)
                 .signWith(getSigningKey(), SignatureAlgorithm.HS512)
                 .compact();
-    }
-    public String generateAccessToken(Authentication authentication) {
 
-        var userDetails = getUserDetails(authentication);
-        if (userDetails == null) {
+        return JwtTokenResult.builder()
+                .token(token)
+                .jti(claims.getId())
+                .userId(user.getId())
+                .issuedAt(claims.getIssuedAt())
+                .expiredAt(claims.getExpiration())
+                .build();
+    }
+    public String generateAccessTokenFromAuthentication(Authentication authentication) {
+        var user = getUserDetails(authentication).getUser();
+        if (user == null) {
             throw new AppException(ErrorCode.USER_DETAILS_IS_NULL);
         }
+        return generateAccessToken(user);
+    }
+    public String generateAccessToken(User user) {
+
         Claims claims = buildClaims(
-                userDetails,
+                user,
                 "ACCESS",
                 jwtProperties.getAccessTokenExpiration()
         );
@@ -75,7 +88,7 @@ public class JwtService {
                 .signWith(getSigningKey(), SignatureAlgorithm.HS512)
                 .compact();
     }
-    private Claims buildClaims(CustomUserDetails userDetails, String tokenType, long expiration) {
+    private Claims buildClaims(User user, String tokenType, long expiration) {
         //co 2 cach de tiep can viec lay role va permission
 //        List<String> roles = userDetails.getAuthorities().stream()
 //                .map(GrantedAuthority::getAuthority).filter(Objects::nonNull)
@@ -89,24 +102,26 @@ public class JwtService {
 
         //cach nay tranh phu thuoc vao naming convention (ROLE_)
         //lỡ đổi prefix van de thay doi
-        List<String> roles = userDetails.getUser().getRoles().stream()
+        List<String> roles = user.getRoles().stream()
                 .map(Role::getCode)
                 .toList();
 
-        List<String> permissions = userDetails.getUser().getRoles().stream()
+        List<String> permissions = user.getRoles().stream()
                 .flatMap(role -> role.getPermissions().stream())
                 .map(Permission::getCode)
                 .toList();
         Claims claims = Jwts.claims()
                 .setId(UUID.randomUUID().toString())
-                .setSubject(userDetails.getUser().getEmail())
+                .setSubject(user.getEmail())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + expiration));
 
-        claims.put("roles", roles);
-        claims.put("permissions", permissions);
+        if(tokenType.equals("ACCESS")) {
+            claims.put("roles", roles);
+            claims.put("permissions", permissions);
+        }
         claims.put("tokenType", tokenType);
-        claims.put("userId", userDetails.getUser().getId());
+        claims.put("userId", user.getId());
         return claims;
     }
 }

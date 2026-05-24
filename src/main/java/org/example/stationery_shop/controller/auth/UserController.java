@@ -29,8 +29,8 @@ public class UserController {
         //return ApiResponse.success("Registered Successfully",userResponse);
     }
 
-    @PostMapping("/verify-user")
-    public ApiResponse verifyUser(@RequestParam String token) {
+    @PostMapping("/verify-user/{token}")
+    public ApiResponse verifyUser(@PathVariable String token) {
         userService.verifyUser(token);
         return ApiResponse.builder()
                 .code(200)
@@ -45,7 +45,7 @@ public class UserController {
         userService.resendVerifyToken(user);
         return ApiResponse.builder()
                 .code(200)
-                .message("Verify Successfully, your account has been verified")
+                .message("Send Successfully")
                 .build();
     }
 }

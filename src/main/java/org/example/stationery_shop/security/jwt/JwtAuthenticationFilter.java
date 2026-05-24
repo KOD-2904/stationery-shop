@@ -6,6 +6,7 @@ import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -39,8 +40,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-
-        String jwtToken = getTokenFromRequest(request);
+        String requestPath = request.getServletPath();
+        String jwtToken = getTokenFromRequest(request,requestPath);
 
         // 1. Không có token → đi tiếp luôn
         if (jwtToken == null) {
@@ -50,23 +51,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             var claims = jwtService.parseToken(jwtToken).getBody();
-
             String tokenType = claims.get("tokenType", String.class);
-            String requestPath = request.getServletPath();
 
-            // 2. Refresh endpoint
+            // 2. Refresh endpoint → cần REFRESH token
             if ("/api/auth/refresh".equals(requestPath)
                     && "POST".equalsIgnoreCase(request.getMethod())) {
 
                 if (!"REFRESH".equals(tokenType)) {
                     throw new AppException(ErrorCode.TOKEN_MUST_BE_REFRESH);
                 }
-                // ❗ refresh không set authentication
+                // Không set authentication cho refresh
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            // 3. Các endpoint khác → ACCESS token
+            // 3. Logout endpoint → cần REFRESH token
+            if ("/api/auth/logout".equals(requestPath)
+                    && "POST".equalsIgnoreCase(request.getMethod())) {
+
+                if (!"REFRESH".equals(tokenType)) {
+                    throw new AppException(ErrorCode.TOKEN_MUST_BE_REFRESH);
+                }
+                // Không set authentication cho logout
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            // 4. Các endpoint khác → cần ACCESS token
             if (!"ACCESS".equals(tokenType)) {
                 throw new AppException(ErrorCode.TOKEN_MUST_BE_ACCESS);
             }
@@ -145,11 +156,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.getWriter().write(objectMapper.writeValueAsString(apiResponse));
     }
 
-    private String getTokenFromRequest(HttpServletRequest request) {
-        String Header = request.getHeader("Authorization");
-        if (Header != null && Header.startsWith("Bearer ")) {
-            return Header.substring(7);
+    private String getTokenFromRequest(HttpServletRequest request, String requestPath) {
+
+        // Danh sách endpoint cần REFRESH token
+        boolean needRefreshToken =
+                ("/api/auth/refresh".equals(requestPath) && "POST".equalsIgnoreCase(request.getMethod())) ||
+                        ("/api/auth/logout".equals(requestPath) && "POST".equalsIgnoreCase(request.getMethod()));
+
+        // 1. Thử lấy từ Header trước (cho mobile app)
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
         }
+
+        // 2. Lấy từ Cookie (cho web browser)
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            if (needRefreshToken) {
+                // Endpoint cần refresh token
+                for (Cookie cookie : cookies) {
+                    if ("refreshToken".equals(cookie.getName())) {
+                        return cookie.getValue();
+                    }
+                }
+            } else {
+                // Các endpoint khác cần access token
+                for (Cookie cookie : cookies) {
+                    if ("accessToken".equals(cookie.getName())) {
+                        return cookie.getValue();
+                    }
+                }
+            }
+        }
+
         return null;
     }
 }

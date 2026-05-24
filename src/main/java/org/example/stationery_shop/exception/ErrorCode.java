@@ -16,6 +16,9 @@ public enum ErrorCode {
     TOKEN_MUST_BE_REFRESH(10007, "Token phai la REFRESH TOKEN" , HttpStatus.BAD_REQUEST),
     TOKEN_MUST_BE_ACCESS(10008, "Token phai la ACCESS TOKEN" , HttpStatus.BAD_REQUEST),
     NOT_VALID_TOKEN(10009, "Token khong hop le" , HttpStatus.BAD_REQUEST),
+    USER_NOT_EXIST(10010, "User khong ton tai" , HttpStatus.NOT_FOUND),
+    ACCOUNT_LOCKED(10011, "Tai khoan tam khoa, khieu nai de lam ro" , HttpStatus.BAD_REQUEST),
+    VALIDATION_ERROR(10012, "Validation error" , HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;
