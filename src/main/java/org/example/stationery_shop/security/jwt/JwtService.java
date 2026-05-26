@@ -53,7 +53,7 @@ public class JwtService {
         Claims claims = buildClaims(
                 user,
                 "REFRESH",
-                jwtProperties.getRefreshTokenExpiration()
+                jwtProperties.getRefreshTokenExpirationMillis()
         );
         String token = Jwts.builder()
                 .setClaims(claims)
@@ -80,7 +80,7 @@ public class JwtService {
         Claims claims = buildClaims(
                 user,
                 "ACCESS",
-                jwtProperties.getAccessTokenExpiration()
+                jwtProperties.getAccessTokenExpirationMillis()
         );
 
         return Jwts.builder()

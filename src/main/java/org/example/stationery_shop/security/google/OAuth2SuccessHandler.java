@@ -1,6 +1,5 @@
 package org.example.stationery_shop.security.google;
 
-import io.jsonwebtoken.Jwt;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,12 +15,11 @@ import org.example.stationery_shop.repository.UserRepository;
 import org.example.stationery_shop.security.jwt.JwtProperties;
 import org.example.stationery_shop.security.jwt.JwtService;
 import org.example.stationery_shop.security.jwt.JwtTokenResult;
+import org.example.stationery_shop.service.serviceImpl.auth.RedisServiceImpl;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -35,6 +33,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final RoleRepository roleRepository;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
+    private final RedisServiceImpl redisService;
     @Override
     public void onAuthenticationSuccess(
             HttpServletRequest request,
@@ -46,7 +45,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String googleId = oauthUser.getAttribute("sub");
         String name = oauthUser.getAttribute("name");
 
-        Optional<User> optionalUser = userRepository.findByEmail(email);
+        Optional<User> optionalUser = userRepository.findWithRolesByEmail(email);
 
         User user;
 
@@ -71,12 +70,12 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             }
             user.setLastLoginAt(Instant.now());
 
-            userRepository.save(user);
+            user = userRepository.save(user);
 
         } else {
             HashSet<Role> roles = new HashSet<>();
 
-            Role roleUser = (Role) roleRepository.findByCode("ROLE_USER")
+            Role roleUser = roleRepository.findByCode("ROLE_USER")
                     .orElseThrow(() ->
                             new AppException(ErrorCode.ROLE_NOT_EXIST));
 
@@ -95,6 +94,8 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
             user = userRepository.save(user);
         }
+        user = userRepository.findWithRolesById(user.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXIST));
         log.info("Name : {}", name);
         log.info("sub : {}", googleId);
         log.info("email : {}", email);
@@ -102,6 +103,14 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String accessToken = jwtService.generateAccessToken(user);
         JwtTokenResult jwtTokenResult = jwtService.generateRefreshTokenResult(user);
         String refreshToken = jwtTokenResult.getToken();
+
+        redisService.saveRefreshTokenSession(
+                user.getId(),
+                jwtTokenResult.getJti(),
+                "OAUTH2_BROWSER",
+                request.getRemoteAddr(),
+                request.getHeader("User-Agent")
+        );
 
 
         // Access Token Cookie (15 phút)
@@ -121,6 +130,6 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         response.addCookie(accessCookie);
         response.addCookie(refreshCookie);
 
-        response.sendRedirect("http://localhost:3000/api/auth/oauth2/success");
+        response.sendRedirect("/api/auth/oauth2/success");
     }
 }

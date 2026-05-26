@@ -12,6 +12,7 @@ import org.example.stationery_shop.service.auth.MailService;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -43,20 +44,23 @@ public class MailServiceImpl implements MailService {
     }
 
     @Override
-    public void  verifyMail(String token) {
+    @Transactional
+    public void verifyMail(String token) {
         EmailVerifyToken evt = mailRepository.findByToken(token)
                 .orElseThrow(() -> new AppException(ErrorCode.TOKEN_NOT_FOUND));
-//        if (evt.isUsed()) {
-//            throw new AppException(ErrorCode.TOKEN_ALREADY_USED);
-//        }
+        if (evt.isUsed()) {
+            throw new AppException(ErrorCode.TOKEN_ALREADY_USED);
+        }
         if (evt.getExpiresAt().isBefore(Instant.now())) {
             throw new AppException(ErrorCode.TOKEN_EXPIRED);
         }
 
         User user = evt.getUser();
         user.setStatus(UserStatus.ACTIVE);
+        evt.setUsed(true);
+        evt.setUsedAt(Instant.now());
         userRepository.save(user);
-        mailRepository.deleteAllByUser(user);
+        mailRepository.save(evt);
     }
     public EmailVerifyToken buildEmailVerifyToken(User user) {
         String token = UUID.randomUUID().toString();

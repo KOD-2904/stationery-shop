@@ -38,7 +38,7 @@ public class RedisServiceImpl implements RedisService {
         String tokenKey = REFRESH_TOKEN_KEY + jti;
         String userSessionsKey = USER_SESSIONS_KEY + userId;
 
-        Duration ttl = Duration.ofMillis(jwtProperties.getRefreshTokenExpiration());
+        Duration ttl = jwtProperties.getRefreshTokenDuration();
 
         redisTemplate.opsForValue().set(tokenKey, session, ttl);
 

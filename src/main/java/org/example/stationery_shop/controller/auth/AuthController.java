@@ -8,13 +8,15 @@ import lombok.RequiredArgsConstructor;
 import org.example.stationery_shop.dto.request.LoginRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.AuthResponse;
-import org.example.stationery_shop.entity.auth.User;
 import org.example.stationery_shop.exception.AppException;
 import org.example.stationery_shop.exception.ErrorCode;
 import org.example.stationery_shop.security.jwt.JwtProperties;
-import org.example.stationery_shop.service.auth.AuthService;
 import org.example.stationery_shop.service.serviceImpl.auth.AuthServiceImpl;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
@@ -26,80 +28,111 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<AuthResponse> login(
             @Valid @RequestBody LoginRequest loginRequest,
-            HttpServletRequest httpServletRequest,
-            HttpServletResponse httpServletResponse
+            HttpServletRequest request,
+            HttpServletResponse response
     ) {
-        String ip = httpServletRequest.getRemoteAddr();
-        String userAgent = httpServletRequest.getHeader("User-Agent");
-
+        String ip = request.getRemoteAddr();
+        String userAgent = request.getHeader("User-Agent");
         String device = "UNKNOWN_DEVICE";
-        // Hoặc tự parse ra tên thiết bị sau cũng được
-        var result = authService.login(loginRequest, ip, userAgent, device);
-        setTokenCookies(httpServletResponse, result.getAccessToken(), result.getRefreshToken());
+
+        AuthResponse result = authService.login(loginRequest, ip, device, userAgent);
+        setTokenCookies(response, result.getAccessToken(), result.getRefreshToken());
+
         return ApiResponse.<AuthResponse>builder()
                 .code(200)
                 .message("Login successful")
                 .result(result)
                 .build();
     }
-    @PostMapping("/login-google") //user loginbang google
-    public ApiResponse<AuthResponse> loginGoogle(
-            ) {
+
+    @PostMapping("/login-google")
+    public ApiResponse<AuthResponse> loginGoogle() {
         return ApiResponse.<AuthResponse>builder()
                 .code(200)
                 .message("Login successful")
-            //    .result(authService.login(loginRequest, httpServletRequest.getRemoteAddr()))
                 .build();
     }
-    @PostMapping("/set-password") //set thêm password cho user truoc do login bang google
-    public ApiResponse<AuthResponse> setPasswordForGoogleUser(
-            ) {
+
+    @PostMapping("/set-password")
+    public ApiResponse<AuthResponse> setPasswordForGoogleUser() {
         return ApiResponse.<AuthResponse>builder()
                 .code(200)
                 .message("")
-                //.result(authService.login(loginRequest, httpServletRequest.getRemoteAddr()))
                 .build();
     }
-//    @PostMapping("/logout")
-//    public ResponseEntity<?> logout(HttpServletResponse response) {
-//        // Xóa cookies bằng cách set maxAge = 0
-//        Cookie accessCookie = new Cookie("accessToken", "");
-//        accessCookie.setHttpOnly(true);
-//        accessCookie.setPath("/");
-//        accessCookie.setMaxAge(0);
-//
-//        Cookie refreshCookie = new Cookie("refreshToken", "");
-//        refreshCookie.setHttpOnly(true);
-//        refreshCookie.setPath("/");
-//        refreshCookie.setMaxAge(0);
-//
-//        response.addCookie(accessCookie);
-//        response.addCookie(refreshCookie);
-//
-//        return ResponseEntity.ok(Map.of("message", "Logged out"));
-//    }
+
     @PostMapping("/refreshToken")
-    public ApiResponse<AuthResponse> refreshToken(HttpServletRequest httpServletRequest,
-                                                  HttpServletResponse httpServletResponse) {
-        String ip = httpServletRequest.getRemoteAddr();
-        String userAgent = httpServletRequest.getHeader("User-Agent");
-
-        String device = "UNKNOWN_DEVICE";
-
-        String refreshToken = getRefreshTokenFromCookie(httpServletRequest);
-        // Hoặc tự parse ra tên thiết bị sau cũng được
-        var result = authService.refreshToken(refreshToken, ip, userAgent, device);
-
-        setTokenCookies(httpServletResponse, result.getAccessToken(), result.getRefreshToken());
-
+    public ApiResponse<AuthResponse> refreshToken(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        String refreshToken = getRefreshTokenFromRequest(request);
         if (refreshToken == null) {
             throw new AppException(ErrorCode.TOKEN_NOT_FOUND);
         }
+
+        String ip = request.getRemoteAddr();
+        String userAgent = request.getHeader("User-Agent");
+        String device = "UNKNOWN_DEVICE";
+
+        AuthResponse result = authService.refreshToken(refreshToken, ip, userAgent, device);
+        setTokenCookies(response, result.getAccessToken(), result.getRefreshToken());
+
         return ApiResponse.<AuthResponse>builder()
+                .code(200)
+                .message("Refresh token successful")
                 .result(result)
                 .build();
     }
-    private String getRefreshTokenFromCookie(HttpServletRequest request) {
+
+    @PostMapping("/logout")
+    public ApiResponse<Void> logoutOneDevice(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        String refreshToken = getRefreshTokenFromRequest(request);
+        if (refreshToken == null) {
+            throw new AppException(ErrorCode.TOKEN_NOT_FOUND);
+        }
+
+        authService.logoutOneDevice(refreshToken);
+        clearTokenCookies(response);
+
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("Logout successful")
+                .build();
+    }
+
+    @PostMapping("/logout-all")
+    public ApiResponse<Void> logoutAllDevices(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        String refreshToken = getRefreshTokenFromRequest(request);
+        if (refreshToken == null) {
+            throw new AppException(ErrorCode.TOKEN_NOT_FOUND);
+        }
+
+        authService.logoutAllDevices(refreshToken);
+        clearTokenCookies(response);
+
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("Logout all devices successful")
+                .build();
+    }
+
+    @GetMapping("/oauth2/success")
+    public ApiResponse<?> success() {
+        return ApiResponse.builder()
+                .code(200)
+                .message("Login Google success")
+                .result("Login Google success")
+                .build();
+    }
+
+    private String getRefreshTokenFromRequest(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {
             for (Cookie cookie : cookies) {
@@ -108,8 +141,15 @@ public class AuthController {
                 }
             }
         }
+
+        String authorizationHeader = request.getHeader("Authorization");
+        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+            return authorizationHeader.substring(7);
+        }
+
         return null;
     }
+
     private void setTokenCookies(
             HttpServletResponse response,
             String accessToken,
@@ -130,10 +170,21 @@ public class AuthController {
         response.addCookie(accessCookie);
         response.addCookie(refreshCookie);
     }
-    @GetMapping("/oauth2/success")
-    public ApiResponse<?> success() {
-        return ApiResponse.builder()
-                .result("Login Google success")
-                .build();
+
+    private void clearTokenCookies(HttpServletResponse response) {
+        Cookie accessCookie = new Cookie("accessToken", "");
+        accessCookie.setHttpOnly(true);
+        accessCookie.setSecure(false);
+        accessCookie.setPath("/");
+        accessCookie.setMaxAge(0);
+
+        Cookie refreshCookie = new Cookie("refreshToken", "");
+        refreshCookie.setHttpOnly(true);
+        refreshCookie.setSecure(false);
+        refreshCookie.setPath("/");
+        refreshCookie.setMaxAge(0);
+
+        response.addCookie(accessCookie);
+        response.addCookie(refreshCookie);
     }
 }

@@ -39,7 +39,7 @@ Use the following stack unless the user explicitly changes it:
 ### Backend
 
 - Java 17.0.12
-- Spring Boot 3.x
+- Spring Boot 4.x
 - Spring Security
 - Spring Data JPA / Hibernate
 - Bean Validation

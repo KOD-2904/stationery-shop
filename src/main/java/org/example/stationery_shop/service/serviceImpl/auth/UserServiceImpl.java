@@ -14,6 +14,8 @@ import org.example.stationery_shop.repository.UserRepository;
 import org.example.stationery_shop.service.auth.UserService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.Optional;
@@ -34,7 +36,7 @@ public class UserServiceImpl implements UserService {
     public User register(RegisterRequest registerRequest) {
 
         Optional<User> optionalUser =
-                userRepository.findByEmail(registerRequest.getEmail());
+                userRepository.findWithRolesByEmail(registerRequest.getEmail());
 
         User user;
 
@@ -69,9 +71,10 @@ public class UserServiceImpl implements UserService {
             // nếu muốn verify email lại
             // user.setStatus(UserStatus.INACTIVE);
 
-            userRepository.save(user);
+            user = userRepository.save(user);
 
-            return user;
+            return userRepository.findWithRolesById(user.getId())
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXIST));
         }
 
         // =========================================
@@ -80,7 +83,7 @@ public class UserServiceImpl implements UserService {
 
         HashSet<Role> roles = new HashSet<>();
 
-        Role roleUser = (Role) roleRepository.findByCode("ROLE_USER")
+        Role roleUser = roleRepository.findByCode("ROLE_USER")
                 .orElseThrow(() ->
                         new AppException(ErrorCode.ROLE_NOT_EXIST));
 
@@ -105,7 +108,7 @@ public class UserServiceImpl implements UserService {
 
         String link =
                 baseUrl +
-                        "/auth/verify-user?token=" +
+                        "/api/auth/verify-user?token=" +
                         emailVerifyToken.getToken();
 
         mailService.sendMail(
@@ -113,7 +116,8 @@ public class UserServiceImpl implements UserService {
                 link
         );
 
-        return returnUser;
+        return userRepository.findWithRolesById(returnUser.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXIST));
     }
 //    @Override
 //    public User register(RegisterRequest registerRequest) {
@@ -149,13 +153,28 @@ public class UserServiceImpl implements UserService {
     public void verifyUser(String token) {
         mailService.verifyMail(token);
     }
-
     @Override
+    @Transactional
     public void resendVerifyToken(User user) {
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED);
+        }
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            throw new AppException(ErrorCode.ACCOUNT_ALREADY_VERIFIED);
+        }
+        mailRepository.deleteAllByUser(user);
         var emailVerifyToken =  mailService.buildEmailVerifyToken(user);
         mailRepository.save(emailVerifyToken);
-        String link = baseUrl + "/auth/verify-user?token=" + emailVerifyToken.getToken();
+        String link = baseUrl + "/api/auth/verify-user?token=" + emailVerifyToken.getToken();
         mailService.sendMail(user.getEmail(), link);
+    }
+
+    @Override
+    @Transactional
+    public void resendVerifyToken(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXIST));
+        resendVerifyToken(user);
     }
 
 
