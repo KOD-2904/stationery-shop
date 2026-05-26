@@ -5,6 +5,7 @@ import lombok.*;
 import org.example.stationery_shop.entity.BaseEntity;
 import org.example.stationery_shop.enums.UserStatus;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -49,6 +50,8 @@ public class User extends BaseEntity {
     private Set<String> providers = new HashSet<>();         // "google" hoặc "local"
 //    @ElementCollection(fetch = FetchType.EAGER)   //nen can nhac
 //    private Set<String> providers = new HashSet<>();
+//    private String provider;
+
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -57,7 +60,7 @@ public class User extends BaseEntity {
     @Column(name = "is_phone_verified", nullable = false)
     private boolean phoneVerified = false;
 
-    private LocalDateTime lastLoginAt;
+    private Instant lastLoginAt;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

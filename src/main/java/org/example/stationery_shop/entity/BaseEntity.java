@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Getter
@@ -17,20 +18,20 @@ public class BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
     @Column(name = "created_at", nullable = false, updatable = false)
-    LocalDateTime createdAt;
+    Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    LocalDateTime updatedAt;
+    Instant updatedAt;
 
     @PrePersist
     protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         this.createdAt = now;
         this.updatedAt = now;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = Instant.now();
     }
 }

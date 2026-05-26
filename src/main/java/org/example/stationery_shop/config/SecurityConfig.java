@@ -2,6 +2,7 @@ package org.example.stationery_shop.config;
 
 import lombok.RequiredArgsConstructor;
 import org.example.stationery_shop.security.google.OAuth2SuccessHandler;
+import org.example.stationery_shop.security.jwt.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,9 +21,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 public class SecurityConfig {
     private final String[] PUBLIC_ENDPOINTS = {
-            "/oauth2/**", "/api/auth/login", "/auth/token", "/auth/introspect", "/auth/log-out", "/auth/refreshToken", "/api/auth/register", "/auth/verify-email"
+            "/api/auth/oauth2/**", "/api/auth/login", "/api/auth/token", "/api/auth/introspect", "/api/auth/log-out", "/api/auth/logout", "/api/auth/logout-all", "/api/auth/refreshToken", "/api/auth/register", "/api/auth/verify-email", "/api/auth/verify-user"
     };
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final JwtAuthenticationEntryPoint authenticationFilter;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -32,32 +35,30 @@ public class SecurityConfig {
         httpRequest
                 .cors(cors -> {})
                 .csrf(AbstractHttpConfigurer::disable)
-                //.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(exceptions ->
+                        exceptions.authenticationEntryPoint(authenticationFilter)
+                )
                 .authorizeHttpRequests(authorizeRequests -> {
                     authorizeRequests
                             .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS).permitAll()
                             .requestMatchers(HttpMethod.GET, PUBLIC_ENDPOINTS).permitAll()
                             .requestMatchers(HttpMethod.GET, "/auth/verify-email").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/brands/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/product-variants/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/stores/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/inventory/**").permitAll()
                             .requestMatchers(HttpMethod.GET, "/api/payment/**").permitAll()
                             .requestMatchers(HttpMethod.POST, "/api/payment/**").permitAll()
-//                            .requestMatchers(HttpMethod.POST, "/register").permitAll()
-//                            .requestMatchers(HttpMethod.POST, "/auth/introspect").permitAll()
-//                            .requestMatchers(HttpMethod.POST, "/auth/log-out").permitAll()
-//                            .requestMatchers(HttpMethod.GET, "/users").hasAuthority("ROLE_ADMIN")
-                            .anyRequest().authenticated();
+                           .anyRequest().authenticated();
                 })
+
                 .oauth2Login(oAuth2Login -> oAuth2Login
                         .successHandler(oAuth2SuccessHandler))
         ;
-//                .oauth2ResourceServer(oauth2 -> oauth2
-//                        .jwt(jwt -> jwt
-//                                .jwtAuthenticationConverter(jwtConverter())
-//                        )
-//                        .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
-//                )
-//                .exceptionHandling(exceptions -> exceptions
-//                        .authenticationEntryPoint(new JwtAuthenticationEntryPoint()));
-        httpRequest.csrf(AbstractHttpConfigurer::disable);
+      httpRequest.csrf(AbstractHttpConfigurer::disable);
         return httpRequest.build();
     }
     @Bean

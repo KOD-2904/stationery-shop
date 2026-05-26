@@ -2,8 +2,8 @@ package org.example.stationery_shop.security.jwt;
 
 import lombok.*;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import java.time.Duration;
 
 @Data
 @Component
@@ -11,6 +11,18 @@ import org.springframework.stereotype.Component;
 public class JwtProperties {
     @Value("${jwt.secret}")
     private String secret;
-    private long accessTokenExpiration = 3600000; //? ngày
-    private long refreshTokenExpiration = 604800000;
+    private  int accessTokenExpiration = 10*60; //
+    private int refreshTokenExpiration = 60 * 60 * 24 * 7;
+
+    public long getAccessTokenExpirationMillis() {
+        return Duration.ofSeconds(accessTokenExpiration).toMillis();
+    }
+
+    public long getRefreshTokenExpirationMillis() {
+        return Duration.ofSeconds(refreshTokenExpiration).toMillis();
+    }
+
+    public Duration getRefreshTokenDuration() {
+        return Duration.ofSeconds(refreshTokenExpiration);
+    }
 }

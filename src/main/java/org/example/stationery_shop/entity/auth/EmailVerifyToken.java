@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.example.stationery_shop.entity.BaseEntity;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
@@ -30,10 +31,10 @@ public class EmailVerifyToken extends BaseEntity {
 
 
     @Column(name = "expires_at", nullable = false) //tu doan nay tro xuong co the luoc bo
-    LocalDateTime expiresAt;
+    Instant expiresAt;
 
     @Column(name = "used_at")
-    LocalDateTime usedAt;
+    Instant usedAt;
 
     @Column(name = "used", nullable = false)
     boolean used = false;

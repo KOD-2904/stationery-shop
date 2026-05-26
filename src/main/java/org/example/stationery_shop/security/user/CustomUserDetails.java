@@ -5,16 +5,14 @@ import lombok.RequiredArgsConstructor;
 import org.example.stationery_shop.entity.auth.Permission;
 import org.example.stationery_shop.entity.auth.Role;
 import org.example.stationery_shop.entity.auth.User;
-import org.jspecify.annotations.Nullable;
+import org.example.stationery_shop.enums.UserStatus;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Getter
 @RequiredArgsConstructor
@@ -27,13 +25,8 @@ public class CustomUserDetails implements UserDetails {
 
         if (user.getRoles() != null) {
             for (Role role : user.getRoles()) {
-                // Thêm role với prefix ROLE_ (để dùng hasRole())
-                authorities.add(new SimpleGrantedAuthority(
-                        //"ROLE_" +  đoạn này lúc vừa khởi chạy app sẽ tạo trước  ROlE là
-                        // ROLE_ADMIN, ROLE_STAFF, ROLE_USER nên có thể chưa cần  prefix
-                                role.getCode()));
+                authorities.add(new SimpleGrantedAuthority(role.getCode()));
 
-                // Thêm permissions (không prefix, để dùng hasAuthority())
                 if (role.getPermissions() != null) {
                     for (Permission permission : role.getPermissions()) {
                         authorities.add(new SimpleGrantedAuthority(permission.getCode()));
@@ -47,22 +40,22 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public String getPassword() {
-        return user.getPassword(); // Trả về password đã encode
+        return user.getPassword();
     }
 
     @Override
     public String getUsername() {
-        return user.getEmail(); // Dùng email làm username
+        return user.getEmail();
     }
 
     @Override
     public boolean isAccountNonExpired() {
-        return true; // Hoặc lấy từ user nếu có field tương ứng
+        return true;
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return true; // Hoặc lấy từ user.getNonLocked()
+        return user.getStatus() != UserStatus.BANNED;
     }
 
     @Override
@@ -72,6 +65,7 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true; // Giả sử User có field enabled //doan nay van can sua sau
+        return user.getStatus() == UserStatus.ACTIVE
+                || user.getStatus() == UserStatus.INACTIVE;
     }
 }

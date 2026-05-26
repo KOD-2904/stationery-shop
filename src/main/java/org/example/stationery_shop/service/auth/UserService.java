@@ -8,4 +8,5 @@ public interface UserService {
 
     void verifyUser(String token);
     void resendVerifyToken(User user);
+    void resendVerifyToken(String email);
 }

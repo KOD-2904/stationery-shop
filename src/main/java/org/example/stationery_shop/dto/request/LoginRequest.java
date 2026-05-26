@@ -12,6 +12,6 @@ import org.example.stationery_shop.validation.password.ValidPassword;
 public class LoginRequest {
     @ValidEmail(message = "Email phải đúng định dạng")
     private String email;
-//    @ValidPassword(message = "Password phải >=6 ký tự, có chữ hoa và số")
+    @ValidPassword(message = "Password phải >=6 ký tự, có chữ hoa và số")
     private String password;
 }

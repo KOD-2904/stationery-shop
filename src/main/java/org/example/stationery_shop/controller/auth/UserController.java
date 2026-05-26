@@ -2,50 +2,65 @@ package org.example.stationery_shop.controller.auth;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.stationery_shop.dto.request.RegisterRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
+import org.example.stationery_shop.dto.response.UserResponse;
 import org.example.stationery_shop.entity.auth.User;
+import org.example.stationery_shop.mapper.UserMapper;
 
 import org.example.stationery_shop.service.serviceImpl.auth.UserServiceImpl;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/auth/")
 @RequiredArgsConstructor
 public class UserController {
     private final UserServiceImpl userService;
+    private final UserMapper userMapper;
 
     @PostMapping("/register")
-    public ApiResponse<User> register(
+    public ApiResponse<UserResponse> register(
             @Valid @RequestBody RegisterRequest registerRequest
     ) {
         User user = userService.register(registerRequest);
-        return ApiResponse.<User>builder()
+        return ApiResponse.<UserResponse>builder()
                 .code(200)
                 .message("Registered Successfully")
-                .result(user)
+                .result(userMapper.toResponse(user))
                 .build();
         //return ApiResponse.success("Registered Successfully",userResponse);
     }
 
-    @PostMapping("/verify-user")
-    public ApiResponse verifyUser(@RequestParam String token) {
+    @GetMapping("/verify-user")
+    public ApiResponse verifyUserByQuery(@RequestParam String token) {
         userService.verifyUser(token);
         return ApiResponse.builder()
                 .code(200)
                 .message("Verify Successfully, your account has been verified")
                 .build();
-        //return ApiResponse.success("Registered Successfully",userResponse);
     }
+
+//    @PostMapping("/verify-user/{token}")
+//    public ApiResponse verifyUser(@PathVariable String token) {
+//        userService.verifyUser(token);
+//        return ApiResponse.builder()
+//                .code(200)
+//                .message("Verify Successfully, your account has been verified")
+//                .build();
+//        //return ApiResponse.success("Registered Successfully",userResponse);
+//    }
 
     @GetMapping("/resend-verify-user")
     public ApiResponse resendVerifyToken(
-            @AuthenticationPrincipal(expression = "user") User user) {
-        userService.resendVerifyToken(user);
+            Authentication authentication) {
+        log.warn("In controller");
+        userService.resendVerifyToken(authentication.getName());
         return ApiResponse.builder()
                 .code(200)
-                .message("Verify Successfully, your account has been verified")
+                .message("Send Successfully")
                 .build();
     }
 }

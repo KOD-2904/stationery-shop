@@ -41,7 +41,7 @@ public class ApplicationInitConfig {
                 roleRepository.save(roleUser);
                 log.info("Created ROLE_USER");
             } else {
-                roleUser = (Role) roleRepository.findByCode("ROLE_USER")
+                roleUser = roleRepository.findByCode("ROLE_USER")
                         .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXIST));
             }
 
@@ -53,7 +53,7 @@ public class ApplicationInitConfig {
                 roleRepository.save(roleAdmin);
                 log.info("Created ROLE_ADMIN");
             } else {
-                roleAdmin = (Role) roleRepository.findByCode("ROLE_ADMIN")
+                roleAdmin = roleRepository.findByCode("ROLE_ADMIN")
                         .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXIST));
             }
             if (!roleRepository.existsByCode("ROLE_STAFF")) {
@@ -64,7 +64,7 @@ public class ApplicationInitConfig {
                 roleRepository.save(roleStaff);
                 log.info("Created ROLE_STAFF");
             } else {
-                roleStaff = (Role) roleRepository.findByCode("ROLE_STAFF")
+                roleStaff = roleRepository.findByCode("ROLE_STAFF")
                         .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXIST));
             }
 
