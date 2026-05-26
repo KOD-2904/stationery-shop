@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.*;
 
 @Slf4j
@@ -68,6 +69,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             if(user.getName() == null || user.getName().isBlank()) {
                 user.setName(name);
             }
+            user.setLastLoginAt(Instant.now());
 
             userRepository.save(user);
 
@@ -88,6 +90,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                     .status(UserStatus.ACTIVE)
                     .password(null)
                     .providers(new HashSet<>(Set.of("google")))
+                    .lastLoginAt(Instant.now())
                     .build();
 
             user = userRepository.save(user);
@@ -119,6 +122,5 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         response.addCookie(refreshCookie);
 
         response.sendRedirect("http://localhost:3000/api/auth/oauth2/success");
-
     }
 }

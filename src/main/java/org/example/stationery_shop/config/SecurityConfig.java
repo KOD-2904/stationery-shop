@@ -24,6 +24,7 @@ public class SecurityConfig {
             "/api/auth/oauth2/**", "/api/auth/login", "/api/auth/token", "/api/auth/introspect", "/api/auth/log-out", "/api/auth/refreshToken", "/api/auth/register", "/api/auth/verify-email"
     };
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final JwtAuthenticationEntryPoint authenticationFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -35,6 +36,9 @@ public class SecurityConfig {
                 .cors(cors -> {})
                 .csrf(AbstractHttpConfigurer::disable)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(exceptions ->
+                        exceptions.authenticationEntryPoint(authenticationFilter)
+                )
                 .authorizeHttpRequests(authorizeRequests -> {
                     authorizeRequests
                             .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS).permitAll()
@@ -44,6 +48,7 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.POST, "/api/payment/**").permitAll()
                            .anyRequest().authenticated();
                 })
+
                 .oauth2Login(oAuth2Login -> oAuth2Login
                         .successHandler(oAuth2SuccessHandler))
         ;

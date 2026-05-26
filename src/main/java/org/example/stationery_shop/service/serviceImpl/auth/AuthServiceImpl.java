@@ -24,6 +24,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +53,8 @@ public class AuthServiceImpl implements AuthService {
             User user = userRepository.findByEmail(email).orElseThrow(
                     () -> new AppException(ErrorCode.EMAIL_NOT_EXIST)
             );
+            user.setLastLoginAt(Instant.now());
+            userRepository.save(user);
 
             String accessToken = jwtService.generateAccessTokenFromAuthentication(authentication);
             JwtTokenResult refreshTokenResult =

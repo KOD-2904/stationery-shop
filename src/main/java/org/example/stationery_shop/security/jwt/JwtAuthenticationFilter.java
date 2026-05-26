@@ -136,6 +136,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         } catch (ExpiredJwtException e) {
             handleJwtError(response, ErrorCode.TOKEN_EXPIRED);
+            return;
+
         } catch (SignatureException | MalformedJwtException |
                  UnsupportedJwtException | IllegalArgumentException e) {
             handleJwtError(response, ErrorCode.NOT_VALID_TOKEN);
@@ -160,7 +162,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // Danh sách endpoint cần REFRESH token
         boolean needRefreshToken =
-                ("/api/auth/refresh".equals(requestPath) && "POST".equalsIgnoreCase(request.getMethod())) ||
+                ("/api/auth/refreshToken".equals(requestPath) && "POST".equalsIgnoreCase(request.getMethod())) ||
                         ("/api/auth/logout".equals(requestPath) && "POST".equalsIgnoreCase(request.getMethod()));
 
         // 1. Thử lấy từ Header trước (cho mobile app)
