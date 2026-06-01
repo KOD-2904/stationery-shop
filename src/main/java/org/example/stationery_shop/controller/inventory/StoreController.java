@@ -6,6 +6,7 @@ import org.example.stationery_shop.dto.request.StoreRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.StoreResponse;
 import org.example.stationery_shop.service.InventoryService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +35,7 @@ public class StoreController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping
     public ApiResponse<StoreResponse> createStore(@Valid @RequestBody StoreRequest request) {
         return ApiResponse.<StoreResponse>builder()
@@ -43,6 +45,7 @@ public class StoreController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PutMapping("/{id}")
     public ApiResponse<StoreResponse> updateStore(
             @PathVariable String id,

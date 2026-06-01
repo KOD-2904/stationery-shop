@@ -7,6 +7,7 @@ import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.ProductVariantResponse;
 import org.example.stationery_shop.dto.response.ProductVariantImageResponse;
 import org.example.stationery_shop.service.CatalogService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
 public class ProductVariantController {
     private final CatalogService catalogService;
 

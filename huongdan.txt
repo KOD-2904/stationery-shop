@@ -1,0 +1,214 @@
+Bạn hãy phân tích project Spring Boot hiện tại và thiết kế/cập nhật flow checkout + thanh toán VNPAY + vận chuyển GHN theo yêu cầu sau.
+
+Bối cảnh:
+- Project là hệ thống bán hàng jewelry/stationery shop.
+- Khách hàng có 2 lựa chọn nhận hàng:
+  1. Nhận tại cửa hàng.
+  2. Ship tận nơi qua GHN.
+- Thanh toán online bằng VNPAY cho cả 2 hình thức.
+- Hệ thống phải tuân thủ inventory locking during checkout, đảm bảo đồng bộ dữ liệu, nhất quán trạng thái và rollback khi có lỗi.
+
+Yêu cầu nghiệp vụ:
+
+1. Address entity
+- Thêm entity Address nếu project chưa có.
+- Quan hệ: UserAccount/User 1 - N Address.
+- Address cần có các trường cơ bản:
+  - id
+  - user
+  - receiverName
+  - receiverPhone
+  - provinceId / provinceName
+  - districtId / districtName
+  - wardCode / wardName
+  - detailAddress
+  - isDefault
+  - createdAt
+  - updatedAt
+- Mỗi user chỉ nên có một địa chỉ mặc định.
+- Khi tạo địa chỉ đầu tiên thì tự set isDefault = true.
+- Nếu set một địa chỉ làm default thì các địa chỉ còn lại của user phải chuyển isDefault = false.
+
+2. Delivery method
+- Checkout phải hỗ trợ enum DeliveryMethod:
+  - PICKUP_AT_STORE
+  - SHIP_TO_HOME
+- Nếu PICKUP_AT_STORE:
+  - Không cần Address.
+  - Shipping fee = 0.
+  - Sau khi thanh toán VNPAY thành công, gửi thông báo qua Gmail/email hoặc SĐT nếu project có module notification.
+  - Không gọi GHN.
+- Nếu SHIP_TO_HOME:
+  - Bắt buộc chọn Address từ sổ địa chỉ của user.
+  - Trước khi checkout phải có API tính phí ship dự kiến.
+  - Phí ship phải được hiển thị trước khi user xác nhận checkout.
+  - Vì jewelry kích thước nhỏ nên mặc định kích thước/khối lượng đơn hàng nếu product chưa có thông tin:
+    - weight: 300g
+    - length: 10cm
+    - width: 10cm
+    - height: 5cm
+  - Khi thanh toán VNPAY thành công mới gọi GHN Create Order.
+  - Phải đảm bảo phí ship dùng để tạo order GHN đồng bộ với phí ship đã hiển thị ban đầu.
+
+3. Shipping fee snapshot
+- Khi user gọi API calculate shipping fee, hệ thống cần lưu lại snapshot phí ship cho checkout session/order draft.
+- Snapshot tối thiểu gồm:
+  - shippingFee
+  - deliveryMethod
+  - addressId
+  - provider = GHN
+  - serviceId/serviceTypeId nếu có
+  - weight/length/width/height
+  - expiredAt
+- Khi user bấm checkout, phải dùng lại snapshot còn hiệu lực.
+- Nếu snapshot hết hạn hoặc address thay đổi thì yêu cầu tính lại phí ship.
+- Không được tự tính lại âm thầm sau khi user đã xác nhận nếu điều đó làm thay đổi tổng tiền.
+- Khi gọi GHN Create Order sau VNPAY success, phải truyền đúng phí ship snapshot ban đầu.
+- Nếu GHN trả phí lệch so với snapshot, xử lý theo hướng an toàn:
+  - Nếu lệch vượt ngưỡng cấu hình thì không tạo đơn GHN, đánh dấu order cần xử lý thủ công.
+  - Không được tự ý thu thêm tiền khách.
+  - Ghi log rõ ràng.
+
+4. Inventory locking
+- Checkout phải khóa inventory trước khi redirect sang VNPAY.
+- Không được trừ tồn kho thật ngay tại bước tạo checkout nếu thanh toán chưa thành công.
+- Cần có cơ chế lock/reserve inventory:
+  - reservedQuantity hoặc InventoryReservation entity.
+  - reservation có expiredAt.
+  - status: ACTIVE, CONFIRMED, RELEASED, EXPIRED.
+- Khi checkout bắt đầu:
+  - Kiểm tra tồn kho khả dụng = stockQuantity - reservedQuantity.
+  - Nếu đủ thì tạo reservation/lock số lượng tương ứng.
+  - Nếu không đủ thì báo lỗi hết hàng.
+- Khi VNPAY thanh toán thành công:
+  - Confirm reservation.
+  - Trừ tồn kho thật.
+  - Giảm reservedQuantity tương ứng.
+- Khi VNPAY thất bại/hủy/hết hạn:
+  - Release reservation.
+  - Không trừ tồn kho.
+- Cần xử lý idempotency để callback VNPAY/IPN gọi nhiều lần không trừ kho nhiều lần.
+
+5. Order/payment flow
+Thiết kế flow tổng thể:
+
+A. User chọn DeliveryMethod.
+B. Nếu SHIP_TO_HOME:
+   - User chọn Address.
+   - Frontend gọi API calculate shipping fee.
+   - Backend gọi GHN fee API, lưu shipping fee snapshot.
+C. User bấm Checkout.
+D. Backend validate cart, address, shipping snapshot.
+E. Backend lock inventory.
+F. Backend tạo Order ở trạng thái PENDING_PAYMENT.
+G. Backend tạo Payment ở trạng thái PENDING.
+H. Backend tạo URL VNPAY và trả về frontend.
+I. User thanh toán ở VNPAY.
+J. VNPAY gọi IPN/return URL.
+K. Backend verify secure hash, amount, orderId, payment status.
+L. Nếu thanh toán thành công:
+   - Update Payment SUCCESS.
+   - Confirm inventory reservation.
+   - Trừ tồn kho thật.
+   - Nếu PICKUP_AT_STORE:
+      + Update Order PAID / WAITING_FOR_PICKUP.
+      + Gửi notification cho khách.
+   - Nếu SHIP_TO_HOME:
+      + Gọi GHN Create Order bằng thông tin Address + shipping snapshot.
+      + Nếu GHN success:
+         * Lưu ghnOrderCode.
+         * Update Shipping CREATED.
+         * Update Order WAITING_FOR_PICKUP hoặc PROCESSING.
+      + Nếu GHN fail:
+         * Không rollback payment vì tiền đã thu.
+         * Không làm mất dữ liệu order.
+         * Đánh dấu Order SHIPPING_CREATION_FAILED / NEED_MANUAL_PROCESSING.
+         * Ghi log lỗi.
+         * Có thể gửi thông báo admin xử lý thủ công.
+M. Nếu thanh toán thất bại:
+   - Update Payment FAILED.
+   - Release inventory reservation.
+   - Update Order PAYMENT_FAILED hoặc CANCELLED.
+
+6. Transaction consistency
+- Dùng @Transactional cho các bước database quan trọng.
+- Không gọi external API trong cùng transaction DB quá lâu nếu có thể tránh.
+- Với VNPAY success:
+  - Transaction 1: verify + update payment + confirm inventory + update order base state.
+  - Sau đó gọi GHN.
+  - Transaction 2: lưu kết quả GHN.
+- Đảm bảo không có trạng thái lưng chừng không được quản lý.
+- Dùng enum status rõ ràng cho OrderStatus, PaymentStatus, ShippingStatus, ReservationStatus.
+- Các callback phải idempotent:
+  - Nếu payment đã SUCCESS thì return kết quả cũ, không xử lý lại.
+  - Nếu inventory reservation đã CONFIRMED thì không trừ kho lần 2.
+  - Nếu GHN order đã tạo thì không tạo lại lần 2.
+
+7. API cần có
+Hãy đề xuất/tạo các endpoint nếu chưa có:
+- Address:
+  - GET /api/addresses
+  - POST /api/addresses
+  - PUT /api/addresses/{id}
+  - DELETE /api/addresses/{id}
+  - PATCH /api/addresses/{id}/default
+- Checkout:
+  - POST /api/checkout/shipping-fee
+  - POST /api/checkout
+- Payment:
+  - GET /api/payments/vnpay-return
+  - GET hoặc POST /api/payments/vnpay-ipn
+- Order:
+  - GET /api/orders/{id}
+  - GET /api/orders/my-orders
+
+8. Database/entity cần rà soát
+Hãy kiểm tra project hiện tại và đề xuất/cập nhật các entity liên quan:
+- User/UserAccount
+- Product/ProductVariant nếu có
+- Cart/CartItem
+- Order/OrderItem
+- Payment
+- Shipping/Shipment
+- Address
+- InventoryReservation hoặc cơ chế reservedQuantity
+
+9. Error handling
+- Nếu thiếu address khi SHIP_TO_HOME thì trả lỗi rõ ràng.
+- Nếu chọn PICKUP_AT_STORE thì không yêu cầu address.
+- Nếu phí ship snapshot hết hạn thì trả lỗi yêu cầu tính lại phí ship.
+- Nếu tồn kho không đủ thì trả lỗi rõ sản phẩm nào thiếu.
+- Nếu VNPAY amount không khớp order total thì reject callback.
+- Nếu secure hash sai thì reject callback.
+- Nếu GHN fail sau khi đã payment success thì order chuyển NEED_MANUAL_PROCESSING, không xóa order và không hoàn tiền tự động.
+
+10. Security/config
+- Không hard-code secret VNPAY/GHN trong source.
+- Đọc từ biến môi trường hoặc application.properties dùng placeholder.
+- Nếu project đang có secret hard-code, chuyển sang env placeholders.
+- Không commit file .env.
+- Tạo/cập nhật .env.example nếu cần.
+
+11. Yêu cầu output của Codex
+- Trước khi sửa code, hãy phân tích kiến trúc hiện tại và liệt kê các file sẽ thay đổi.
+- Ưu tiên thay đổi nhỏ, bám theo cấu trúc hiện có của project.
+- Nếu thiếu thông tin API GHN/VNPAY cụ thể, hãy tạo interface/service abstraction và để TODO rõ ràng.
+- Viết code production-minded, có validate, exception rõ ràng.
+- Không phá vỡ chức năng auth hiện tại.
+- Sau khi sửa, hãy build project.
+- Nếu có thể, thêm unit test/service test cho:
+  - shipping fee snapshot validation
+  - inventory reservation lock/release/confirm
+  - VNPAY callback idempotency
+  - delivery method PICKUP_AT_STORE không gọi GHN
+  - delivery method SHIP_TO_HOME gọi GHN sau payment success
+
+Mục tiêu cuối cùng:
+Hoàn thiện flow checkout nhất quán:
+- User chọn nhận tại cửa hàng hoặc ship tận nơi.
+- Ship tận nơi có sổ địa chỉ và phí ship hiển thị trước.
+- Thanh toán VNPAY online.
+- Sau payment success mới tạo GHN nếu cần.
+- Inventory được lock khi checkout và chỉ trừ thật khi payment success.
+- Có rollback/release khi payment fail.
+- Đảm bảo idempotency, transaction consistency, không trừ kho hoặc tạo vận đơn nhiều lần.

@@ -7,6 +7,7 @@ import org.example.stationery_shop.dto.request.InventoryChangeRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.InventoryResponse;
 import org.example.stationery_shop.service.InventoryService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +34,7 @@ public class InventoryController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping("/import")
     public ApiResponse<InventoryResponse> importStock(
             @Valid @RequestBody InventoryChangeRequest request
@@ -44,6 +46,7 @@ public class InventoryController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping("/adjust")
     public ApiResponse<InventoryResponse> adjustStock(
             @Valid @RequestBody InventoryAdjustRequest request
@@ -55,6 +58,7 @@ public class InventoryController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping("/lock")
     public ApiResponse<InventoryResponse> lockStock(
             @Valid @RequestBody InventoryChangeRequest request
@@ -66,6 +70,7 @@ public class InventoryController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping("/release")
     public ApiResponse<InventoryResponse> releaseStock(
             @Valid @RequestBody InventoryChangeRequest request
@@ -77,6 +82,7 @@ public class InventoryController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping("/deduct")
     public ApiResponse<InventoryResponse> deductStock(
             @Valid @RequestBody InventoryChangeRequest request

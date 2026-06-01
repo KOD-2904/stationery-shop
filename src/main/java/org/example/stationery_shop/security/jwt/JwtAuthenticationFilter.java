@@ -84,7 +84,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             List<GrantedAuthority> authorities = new ArrayList<>();
             roles.forEach(role -> authorities.add(new SimpleGrantedAuthority(role)));
             permissions.forEach(permission -> authorities.add(new SimpleGrantedAuthority(permission)));
-
+            for (GrantedAuthority authority : authorities) {
+                log.warn("authority: {}", authority.getAuthority().toString());
+            }
             UsernamePasswordAuthenticationToken authToken =
                     new UsernamePasswordAuthenticationToken(
                             claims.getSubject(),
@@ -94,9 +96,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-            if (SecurityContextHolder.getContext().getAuthentication() == null) {
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-            }
+            SecurityContextHolder.getContext().setAuthentication(authToken);
+            log.warn("path: {}, method: {}", request.getServletPath(), request.getMethod());
+            log.warn("token exists: {}", jwtToken != null);
+            log.warn("tokenType: {}", tokenType);
+            log.warn("security auth after set: {}", SecurityContextHolder.getContext().getAuthentication());
 
             filterChain.doFilter(request, response);
         } catch (ExpiredJwtException e) {
