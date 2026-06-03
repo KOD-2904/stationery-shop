@@ -55,7 +55,6 @@ public class Product extends BaseEntity {
 
     @Column(name = "thumbnail_url", length = 1000)
     private String thumbnailUrl;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "pricing_type", nullable = false, length = 30)
     private PricingType pricingType = PricingType.ABSOLUTE_FIXED;

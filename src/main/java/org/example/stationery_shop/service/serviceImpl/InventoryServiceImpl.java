@@ -3,14 +3,17 @@ package org.example.stationery_shop.service.serviceImpl;
 import lombok.RequiredArgsConstructor;
 import org.example.stationery_shop.dto.request.InventoryAdjustRequest;
 import org.example.stationery_shop.dto.request.InventoryChangeRequest;
+import org.example.stationery_shop.dto.request.StoreAddressRequest;
 import org.example.stationery_shop.dto.request.StoreRequest;
 import org.example.stationery_shop.dto.response.InventoryResponse;
+import org.example.stationery_shop.dto.response.PickupStoreResponse;
 import org.example.stationery_shop.dto.response.StoreResponse;
 import org.example.stationery_shop.entity.catalog.ProductVariant;
 import org.example.stationery_shop.entity.inventory.Inventory;
 import org.example.stationery_shop.entity.inventory.InventoryTransaction;
 import org.example.stationery_shop.entity.inventory.Store;
 import org.example.stationery_shop.enums.InventoryTransactionType;
+import org.example.stationery_shop.enums.StoreDistanceLevel;
 import org.example.stationery_shop.exception.AppException;
 import org.example.stationery_shop.exception.ErrorCode;
 import org.example.stationery_shop.mapper.InventoryMapper;
@@ -21,6 +24,7 @@ import org.example.stationery_shop.repository.StoreRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -49,10 +53,10 @@ public class InventoryServiceImpl implements org.example.stationery_shop.service
         Store store = Store.builder()
                 .code(request.getCode())
                 .name(request.getName())
-                .address(request.getAddress())
                 .phone(request.getPhone())
                 .active(request.getActive() == null || request.getActive())
                 .build();
+        applyStoreAddress(store, request.getAddress());
         return inventoryMapper.toStoreResponse(storeRepository.save(store));
     }
 
@@ -66,12 +70,27 @@ public class InventoryServiceImpl implements org.example.stationery_shop.service
         }
         store.setCode(request.getCode());
         store.setName(request.getName());
-        store.setAddress(request.getAddress());
         store.setPhone(request.getPhone());
+        applyStoreAddress(store, request.getAddress());
         if (request.getActive() != null) {
             store.setActive(request.getActive());
         }
         return inventoryMapper.toStoreResponse(storeRepository.save(store));
+    }
+
+    @Override
+    public List<PickupStoreResponse> findPickupStores(String productVariantId, Integer quantity,
+                                                      Integer provinceId, Integer districtId, String wardCode) {
+        int requestedQuantity = quantity == null || quantity < 1 ? 1 : quantity;
+        productVariantRepository.findById(productVariantId)
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_VARIANT_NOT_EXIST));
+        return inventoryRepository.findPickupCandidates(productVariantId, requestedQuantity)
+                .stream()
+                .map(inventory -> toPickupStoreResponse(inventory, provinceId, districtId, wardCode))
+                .sorted(Comparator
+                        .comparing((PickupStoreResponse response) -> response.getDistanceLevel().ordinal())
+                        .thenComparing(response -> response.getStore().getName()))
+                .toList();
     }
 
     @Override
@@ -192,5 +211,37 @@ public class InventoryServiceImpl implements org.example.stationery_shop.service
                 .lockedAfter(inventory.getQuantityLocked())
                 .note(note)
                 .build());
+    }
+
+    private void applyStoreAddress(Store store, StoreAddressRequest address) {
+        store.setProvinceId(address.getProvinceId());
+        store.setProvinceName(address.getProvinceName());
+        store.setDistrictId(address.getDistrictId());
+        store.setDistrictName(address.getDistrictName());
+        store.setWardCode(address.getWardCode());
+        store.setWardName(address.getWardName());
+        store.setDetailAddress(address.getDetailAddress());
+    }
+
+    private PickupStoreResponse toPickupStoreResponse(Inventory inventory, Integer provinceId,
+                                                      Integer districtId, String wardCode) {
+        return PickupStoreResponse.builder()
+                .store(inventoryMapper.toStoreResponse(inventory.getStore()))
+                .quantityAvailable(inventory.getQuantityAvailable())
+                .distanceLevel(resolveDistanceLevel(inventory.getStore(), provinceId, districtId, wardCode))
+                .build();
+    }
+
+    private StoreDistanceLevel resolveDistanceLevel(Store store, Integer provinceId, Integer districtId, String wardCode) {
+        if (wardCode != null && !wardCode.isBlank() && wardCode.equals(store.getWardCode())) {
+            return StoreDistanceLevel.SAME_WARD;
+        }
+        if (districtId != null && districtId.equals(store.getDistrictId())) {
+            return StoreDistanceLevel.SAME_DISTRICT;
+        }
+        if (provinceId != null && provinceId.equals(store.getProvinceId())) {
+            return StoreDistanceLevel.SAME_PROVINCE;
+        }
+        return StoreDistanceLevel.OTHER;
     }
 }

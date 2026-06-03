@@ -107,7 +107,7 @@ public class CatalogMapper {
                 .price(variant.getPrice())
                 .goldWeight(variant.getGoldWeight())
                 .laborCost(variant.getLaborCost())
-                .imageUrl(variant.getImageUrl())
+                .imageUrl(resolveVariantImageUrl(images))
                 .active(variant.isActive())
                 .version(variant.getVersion())
                 .images(images)
@@ -136,5 +136,14 @@ public class CatalogMapper {
                 .primaryImage(image.isPrimaryImage())
                 .sortOrder(image.getSortOrder())
                 .build();
+    }
+
+    private String resolveVariantImageUrl(List<ProductVariantImageResponse> images) {
+        return images.stream()
+                .filter(ProductVariantImageResponse::isPrimaryImage)
+                .findFirst()
+                .or(() -> images.stream().findFirst())
+                .map(ProductVariantImageResponse::getImageUrl)
+                .orElse(null);
     }
 }

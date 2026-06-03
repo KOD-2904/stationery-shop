@@ -7,6 +7,7 @@ import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.ProductImageResponse;
 import org.example.stationery_shop.dto.response.ProductResponse;
 import org.example.stationery_shop.service.CatalogService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,6 +47,7 @@ public class ProductController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping
     public ApiResponse<ProductResponse> createProduct(@Valid @RequestBody ProductRequest request) {
         return ApiResponse.<ProductResponse>builder()
@@ -55,6 +57,7 @@ public class ProductController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PutMapping("/{id}")
     public ApiResponse<ProductResponse> updateProduct(
             @PathVariable String id,
@@ -67,6 +70,7 @@ public class ProductController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping("/{id}/thumbnail")
     public ApiResponse<ProductResponse> uploadThumbnail(
             @PathVariable String id,
@@ -79,6 +83,7 @@ public class ProductController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping("/{id}/images")
     public ApiResponse<ProductImageResponse> uploadImage(
             @PathVariable String id,

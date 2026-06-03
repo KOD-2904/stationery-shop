@@ -27,8 +27,26 @@ public class Store extends BaseEntity {
     @Column(nullable = false, length = 255)
     private String name;
 
-    @Column(length = 500)
-    private String address;
+    @Column(name = "province_id")
+    private Integer provinceId;
+
+    @Column(name = "province_name", length = 255)
+    private String provinceName;
+
+    @Column(name = "district_id")
+    private Integer districtId;
+
+    @Column(name = "district_name", length = 255)
+    private String districtName;
+
+    @Column(name = "ward_code", length = 50)
+    private String wardCode;
+
+    @Column(name = "ward_name", length = 255)
+    private String wardName;
+
+    @Column(name = "detail_address", length = 500)
+    private String detailAddress;
 
     @Column(length = 20)
     private String phone;

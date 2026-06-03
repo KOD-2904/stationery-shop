@@ -5,6 +5,7 @@ import org.example.stationery_shop.dto.request.CategoryRequest;
 import org.example.stationery_shop.dto.request.ProductRequest;
 import org.example.stationery_shop.dto.request.ProductVariantRequest;
 import org.example.stationery_shop.dto.response.BrandResponse;
+import org.example.stationery_shop.dto.response.CatalogImportResponse;
 import org.example.stationery_shop.dto.response.CategoryResponse;
 import org.example.stationery_shop.dto.response.ProductImageResponse;
 import org.example.stationery_shop.dto.response.ProductResponse;
@@ -36,4 +37,6 @@ public interface CatalogService {
     ProductVariantResponse updateVariant(String id, ProductVariantRequest request);
     ProductVariantResponse uploadVariantMainImage(String id, MultipartFile file);
     ProductVariantImageResponse uploadVariantImage(String id, MultipartFile file, boolean primaryImage, Integer sortOrder);
+
+    CatalogImportResponse importCatalog(MultipartFile file);
 }

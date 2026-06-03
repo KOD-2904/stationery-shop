@@ -6,6 +6,7 @@ import org.example.stationery_shop.dto.request.BrandRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.BrandResponse;
 import org.example.stationery_shop.service.CatalogService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,6 +37,7 @@ public class BrandController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping
     public ApiResponse<BrandResponse> createBrand(@Valid @RequestBody BrandRequest request) {
         return ApiResponse.<BrandResponse>builder()
@@ -45,6 +47,7 @@ public class BrandController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PutMapping("/{id}")
     public ApiResponse<BrandResponse> updateBrand(
             @PathVariable String id,
@@ -57,6 +60,7 @@ public class BrandController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping("/{id}/logo")
     public ApiResponse<BrandResponse> uploadLogo(
             @PathVariable String id,

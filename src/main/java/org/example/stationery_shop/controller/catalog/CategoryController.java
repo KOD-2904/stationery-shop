@@ -6,6 +6,7 @@ import org.example.stationery_shop.dto.request.CategoryRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.CategoryResponse;
 import org.example.stationery_shop.service.CatalogService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,6 +37,7 @@ public class CategoryController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping
     public ApiResponse<CategoryResponse> createCategory(@Valid @RequestBody CategoryRequest request) {
         return ApiResponse.<CategoryResponse>builder()
@@ -45,6 +47,7 @@ public class CategoryController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PutMapping("/{id}")
     public ApiResponse<CategoryResponse> updateCategory(
             @PathVariable String id,
@@ -57,6 +60,7 @@ public class CategoryController {
                 .build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
     @PostMapping("/{id}/image")
     public ApiResponse<CategoryResponse> uploadImage(
             @PathVariable String id,

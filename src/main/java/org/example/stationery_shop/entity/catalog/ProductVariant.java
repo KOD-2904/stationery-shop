@@ -46,9 +46,6 @@ public class ProductVariant extends BaseEntity {
     @Column(name = "labor_cost", precision = 18, scale = 2)
     private BigDecimal laborCost;
 
-    @Column(name = "image_url", length = 1000)
-    private String imageUrl;
-
     @Column(nullable = false)
     private boolean active = true;
 
