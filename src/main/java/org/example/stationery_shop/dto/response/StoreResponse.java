@@ -9,7 +9,7 @@ public class StoreResponse {
     private String id;
     private String code;
     private String name;
-    private String address;
+    private StoreAddressResponse address;
     private String phone;
     private boolean active;
 }

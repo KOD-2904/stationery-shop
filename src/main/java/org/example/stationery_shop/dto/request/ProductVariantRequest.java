@@ -21,6 +21,5 @@ public class ProductVariantRequest {
     private BigDecimal goldWeight;
     @PositiveOrZero(message = "Labor cost must be greater than or equal to 0")
     private BigDecimal laborCost;
-    private String imageUrl;
     private Boolean active;
 }

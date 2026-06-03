@@ -29,7 +29,7 @@ public class PaymentWebhookLog extends BaseEntity {
     private String idempotencyKey;
 
     @Lob
-    @Column(name = "raw_payload", nullable = false)
+    @Column(name = "raw_payload", nullable = false, columnDefinition = "LONGTEXT")
     private String rawPayload;
 
     @Column(nullable = false)

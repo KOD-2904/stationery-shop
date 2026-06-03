@@ -1,6 +1,7 @@
 package org.example.stationery_shop.mapper;
 
 import org.example.stationery_shop.dto.response.InventoryResponse;
+import org.example.stationery_shop.dto.response.StoreAddressResponse;
 import org.example.stationery_shop.dto.response.StoreResponse;
 import org.example.stationery_shop.entity.inventory.Inventory;
 import org.example.stationery_shop.entity.inventory.Store;
@@ -16,9 +17,21 @@ public class InventoryMapper {
                 .id(store.getId())
                 .code(store.getCode())
                 .name(store.getName())
-                .address(store.getAddress())
+                .address(toStoreAddressResponse(store))
                 .phone(store.getPhone())
                 .active(store.isActive())
+                .build();
+    }
+
+    private StoreAddressResponse toStoreAddressResponse(Store store) {
+        return StoreAddressResponse.builder()
+                .provinceId(store.getProvinceId())
+                .provinceName(store.getProvinceName())
+                .districtId(store.getDistrictId())
+                .districtName(store.getDistrictName())
+                .wardCode(store.getWardCode())
+                .wardName(store.getWardName())
+                .detailAddress(store.getDetailAddress())
                 .build();
     }
 

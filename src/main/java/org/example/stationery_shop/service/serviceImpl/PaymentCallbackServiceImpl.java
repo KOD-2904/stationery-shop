@@ -14,6 +14,7 @@ import org.example.stationery_shop.entity.shipping.Shipment;
 import org.example.stationery_shop.enums.DeliveryMethod;
 import org.example.stationery_shop.enums.InventoryTransactionType;
 import org.example.stationery_shop.enums.OrderStatus;
+import org.example.stationery_shop.enums.PaymentMethod;
 import org.example.stationery_shop.enums.PaymentStatus;
 import org.example.stationery_shop.enums.ReservationStatus;
 import org.example.stationery_shop.enums.ShippingProvider;
@@ -36,9 +37,11 @@ import org.example.stationery_shop.service.shipping.GhnProperties;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 
@@ -111,14 +114,9 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
             updateOrderStatus(order, order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
                     ? OrderStatus.READY_FOR_PICKUP
                     : OrderStatus.PROCESSING, "VNPAY payment success");
-            shipmentRepository.findByOrderId(order.getId()).orElseGet(() -> shipmentRepository.save(Shipment.builder()
-                    .order(order)
-                    .provider(ShippingProvider.GHN)
-                    .status(order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
-                            ? ShippingStatus.NOT_REQUIRED
-                            : ShippingStatus.PENDING)
-                    .shippingFee(order.getShippingFee())
-                    .build()));
+            getOrCreateShipment(order, order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
+                    ? ShippingStatus.NOT_REQUIRED
+                    : ShippingStatus.PENDING);
         } else {
             payment.setStatus(PaymentStatus.FAILED);
             payment.setProviderTransactionId(params.get("vnp_TransactionNo"));
@@ -134,14 +132,16 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         Order order = orderRepository.findWithItemsById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_EXIST));
-        if (shipmentRepository.findByOrderId(orderId)
+        if (shipmentRepository.findAllByOrderIdOrderByCreatedAtAsc(orderId)
+                .stream()
                 .filter(shipment -> shipment.getGhnOrderCode() != null)
+                .findFirst()
                 .isPresent()) {
             return;
         }
         try {
             ShippingFeeSnapshot snapshot = order.getShippingFeeSnapshot();
-            GhnCreateOrderResult result = ghnClient.createOrder(order, snapshot);
+            GhnCreateOrderResult result = ghnClient.createOrder(order, snapshot, PaymentMethod.VNPAY);
             BigDecimal difference = result.getTotalFee().subtract(snapshot.getShippingFee()).abs();
             if (difference.compareTo(ghnProperties.getMaxFeeDifference()) > 0) {
                 log.warn("GHN fee difference too high for order {}. snapshot={}, ghn={}",
@@ -160,12 +160,7 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
     private void saveGhnSuccess(String orderId, GhnCreateOrderResult result) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_EXIST));
-        Shipment shipment = shipmentRepository.findByOrderId(orderId)
-                .orElseGet(() -> Shipment.builder()
-                        .order(order)
-                        .provider(ShippingProvider.GHN)
-                        .shippingFee(order.getShippingFee())
-                        .build());
+        Shipment shipment = getOrCreateShipment(order, ShippingStatus.PENDING);
         shipment.setStatus(ShippingStatus.CREATED);
         shipment.setGhnOrderCode(result.getOrderCode());
         shipment.setShippingFee(result.getTotalFee());
@@ -176,12 +171,7 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
     private void markShippingManual(String orderId, String note) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_EXIST));
-        Shipment shipment = shipmentRepository.findByOrderId(orderId)
-                .orElseGet(() -> Shipment.builder()
-                        .order(order)
-                        .provider(ShippingProvider.GHN)
-                        .shippingFee(order.getShippingFee())
-                        .build());
+        Shipment shipment = getOrCreateShipment(order, ShippingStatus.PENDING);
         shipment.setStatus(ShippingStatus.NEED_MANUAL_PROCESSING);
         shipment.setNote(note);
         shipmentRepository.save(shipment);
@@ -275,6 +265,22 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
         if (callbackAmount.compareTo(payment.getAmount()) != 0) {
             throw new AppException(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
         }
+    }
+
+    private Shipment getOrCreateShipment(Order order, ShippingStatus initialStatus) {
+        List<Shipment> shipments = shipmentRepository.findAllByOrderIdOrderByCreatedAtAsc(order.getId());
+        if (!shipments.isEmpty()) {
+            return shipments.stream()
+                    .filter(shipment -> StringUtils.hasText(shipment.getGhnOrderCode()))
+                    .findFirst()
+                    .orElse(shipments.get(0));
+        }
+        return shipmentRepository.save(Shipment.builder()
+                .order(order)
+                .provider(ShippingProvider.GHN)
+                .status(initialStatus)
+                .shippingFee(order.getShippingFee())
+                .build());
     }
 
     private void saveWebhookLog(String key, Map<String, String> params, boolean processed) {

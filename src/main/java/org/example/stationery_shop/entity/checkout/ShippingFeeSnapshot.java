@@ -49,6 +49,10 @@ public class ShippingFeeSnapshot extends BaseEntity {
     @Column(name = "shipping_fee", nullable = false, precision = 18, scale = 2)
     private BigDecimal shippingFee;
 
+    @Builder.Default
+    @Column(name = "insurance_value", precision = 18, scale = 2)
+    private BigDecimal insuranceValue = BigDecimal.ZERO;
+
     @Column(name = "service_id")
     private Integer serviceId;
 

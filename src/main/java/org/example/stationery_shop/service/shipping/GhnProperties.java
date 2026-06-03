@@ -18,5 +18,12 @@ public class GhnProperties {
     private Integer shopId;
     private Integer fromDistrictId;
     private String fromWardCode;
+    private String fromName;
+    private String fromPhone;
+    private String fromAddress;
+    private Integer defaultServiceTypeId = 2;
+    //private BigDecimal maxInsuranceValue = BigDecimal.valueOf(0);
+    private BigDecimal maxInsuranceValue;
+    private BigDecimal maxCodAmount;
     private BigDecimal maxFeeDifference = BigDecimal.ZERO;
 }

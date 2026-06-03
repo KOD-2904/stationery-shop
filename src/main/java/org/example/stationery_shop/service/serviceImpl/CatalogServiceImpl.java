@@ -274,7 +274,6 @@ public class CatalogServiceImpl implements CatalogService {
                 .price(request.getPrice())
                 .goldWeight(request.getGoldWeight())
                 .laborCost(request.getLaborCost())
-                .imageUrl(request.getImageUrl())
                 .active(request.getActive() == null || request.getActive())
                 .build();
         return catalogMapper.toProductVariantResponse(productVariantRepository.save(variant));
@@ -293,7 +292,6 @@ public class CatalogServiceImpl implements CatalogService {
         variant.setPrice(request.getPrice());
         variant.setGoldWeight(request.getGoldWeight());
         variant.setLaborCost(request.getLaborCost());
-        variant.setImageUrl(request.getImageUrl());
         if (request.getActive() != null) {
             variant.setActive(request.getActive());
         }
@@ -305,8 +303,15 @@ public class CatalogServiceImpl implements CatalogService {
     public ProductVariantResponse uploadVariantMainImage(String id, MultipartFile file) {
         ProductVariant variant = productVariantRepository.findWithProductById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_VARIANT_NOT_EXIST));
-        variant.setImageUrl(cloudinaryService.uploadImage(file, variantFolder(variant)));
-        return catalogMapper.toProductVariantResponse(productVariantRepository.save(variant));
+        productVariantImageRepository.clearPrimaryImage(id);
+        ProductVariantImage image = ProductVariantImage.builder()
+                .productVariant(variant)
+                .imageUrl(cloudinaryService.uploadImage(file, variantFolder(variant)))
+                .primaryImage(true)
+                .sortOrder(0)
+                .build();
+        productVariantImageRepository.save(image);
+        return catalogMapper.toProductVariantResponse(variant);
     }
 
     @Override
@@ -314,6 +319,9 @@ public class CatalogServiceImpl implements CatalogService {
     public ProductVariantImageResponse uploadVariantImage(String id, MultipartFile file, boolean primaryImage, Integer sortOrder) {
         ProductVariant variant = productVariantRepository.findWithProductById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_VARIANT_NOT_EXIST));
+        if (primaryImage) {
+            productVariantImageRepository.clearPrimaryImage(id);
+        }
         ProductVariantImage image = ProductVariantImage.builder()
                 .productVariant(variant)
                 .imageUrl(cloudinaryService.uploadImage(file, variantFolder(variant)))
@@ -321,10 +329,6 @@ public class CatalogServiceImpl implements CatalogService {
                 .sortOrder(sortOrder)
                 .build();
         ProductVariantImage savedImage = productVariantImageRepository.save(image);
-        if (primaryImage && variant.getImageUrl() == null) {
-            variant.setImageUrl(savedImage.getImageUrl());
-            productVariantRepository.save(variant);
-        }
         return catalogMapper.toProductVariantImageResponse(savedImage);
     }
 
@@ -559,10 +563,19 @@ public class CatalogServiceImpl implements CatalogService {
                 .price(readBigDecimal(row, 18, formatter, "Price is required"))
                 .goldWeight(readBigDecimal(row, 19, formatter, null))
                 .laborCost(readBigDecimal(row, 20, formatter, null))
-                .imageUrl(readCell(row, 21, formatter))
                 .active(readBoolean(row, 22, formatter, true))
                 .build();
-        productVariantRepository.save(variant);
+        ProductVariant savedVariant = productVariantRepository.save(variant);
+        String imageUrl = readCell(row, 21, formatter);
+        if (imageUrl != null) {
+            ProductVariantImage image = ProductVariantImage.builder()
+                    .productVariant(savedVariant)
+                    .imageUrl(imageUrl)
+                    .primaryImage(true)
+                    .sortOrder(0)
+                    .build();
+            productVariantImageRepository.save(image);
+        }
     }
 
     private PricingType readPricingType(Row row, DataFormatter formatter) {

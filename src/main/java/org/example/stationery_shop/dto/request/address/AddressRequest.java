@@ -2,6 +2,7 @@ package org.example.stationery_shop.dto.request.address;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
@@ -10,6 +11,7 @@ public class AddressRequest {
     private String receiverName;
 
     @NotBlank(message = "So dien thoai nguoi nhan khong duoc rong")
+    @Pattern(regexp = "^(0|\\+84)[0-9]{9,10}$", message = "So dien thoai nguoi nhan khong hop le")
     private String receiverPhone;
 
     @NotNull(message = "Province id khong duoc rong")

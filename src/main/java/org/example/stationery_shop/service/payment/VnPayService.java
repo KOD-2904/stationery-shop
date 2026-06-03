@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.StringJoiner;
 import java.util.TimeZone;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,9 +46,13 @@ public class VnPayService {
 
     public boolean verifySignature(Map<String, String> requestParams) {
         String receivedHash = requestParams.get("vnp_SecureHash");
+        if (receivedHash == null) {
+            return false;
+        }
         Map<String, String> params = new TreeMap<>(requestParams);
         params.remove("vnp_SecureHash");
         params.remove("vnp_SecureHashType");
+
         String expectedHash = hmacSha512(properties.getHashSecret(), buildHashData(params));
         return expectedHash.equalsIgnoreCase(receivedHash);
     }
@@ -58,30 +63,38 @@ public class VnPayService {
         return formatter.format(Date.from(instant));
     }
 
-    private String buildQuery(Map<String, String> params) {
-        StringJoiner joiner = new StringJoiner("&");
-        params.forEach((key, value) -> joiner.add(encode(key) + "=" + encode(value)));
-        return joiner.toString();
+    public String buildQuery(Map<String, String> params) {
+        return params.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != null && !entry.getValue().isBlank())
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + "=" + encode(entry.getValue()))
+                .collect(Collectors.joining("&"));
     }
-
-    private String buildHashData(Map<String, String> params) {
-        StringJoiner joiner = new StringJoiner("&");
-        params.forEach((key, value) -> joiner.add(key + "=" + encode(value)));
-        return joiner.toString();
+    public String buildHashData(Map<String, String> params) {
+        return params.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != null && !entry.getValue().isBlank())
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + "=" + encode(entry.getValue()))
+                .collect(Collectors.joining("&"));
     }
-
     private String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+        return URLEncoder.encode(value, StandardCharsets.US_ASCII);
     }
 
     private String hmacSha512(String key, String data) {
         try {
             Mac hmac = Mac.getInstance("HmacSHA512");
-            hmac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA512"));
+            hmac.init(
+                    new SecretKeySpec(
+                            key.getBytes(StandardCharsets.UTF_8),
+                            "HmacSHA512"));
             byte[] bytes = hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hash = new StringBuilder(bytes.length * 2);
+
+            StringBuilder hash = new StringBuilder(2 * bytes.length);
             for (byte b : bytes) {
-                hash.append(String.format("%02x", b));
+                hash.append(String.format("%02x", b & 0xff));
             }
             return hash.toString();
         } catch (Exception exception) {

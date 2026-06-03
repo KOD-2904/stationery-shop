@@ -2,6 +2,7 @@ package org.example.stationery_shop.controller.order;
 
 import lombok.RequiredArgsConstructor;
 import org.example.stationery_shop.dto.response.ApiResponse;
+import org.example.stationery_shop.dto.response.order.GhnOrderInfoResponse;
 import org.example.stationery_shop.dto.response.order.OrderResponse;
 import org.example.stationery_shop.service.OrderService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,6 +35,15 @@ public class OrderController {
                 .code(200)
                 .message("Success")
                 .result(orderService.getMyOrders())
+                .build();
+    }
+
+    @GetMapping("/{id}/ghn-info")
+    public ApiResponse<GhnOrderInfoResponse> getGhnOrderInfo(@PathVariable String id) {
+        return ApiResponse.<GhnOrderInfoResponse>builder()
+                .code(200)
+                .message("Success")
+                .result(orderService.getGhnOrderInfo(id))
                 .build();
     }
 }

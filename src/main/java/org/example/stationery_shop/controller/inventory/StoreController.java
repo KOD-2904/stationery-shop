@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stationery_shop.dto.request.StoreRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
+import org.example.stationery_shop.dto.response.PickupStoreResponse;
 import org.example.stationery_shop.dto.response.StoreResponse;
 import org.example.stationery_shop.service.InventoryService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,6 +33,21 @@ public class StoreController {
                 .code(200)
                 .message("Success")
                 .result(inventoryService.getStores(includeInactive))
+                .build();
+    }
+
+    @GetMapping("/pickup-candidates")
+    public ApiResponse<List<PickupStoreResponse>> findPickupStores(
+            @RequestParam String productVariantId,
+            @RequestParam(defaultValue = "1") Integer quantity,
+            @RequestParam(required = false) Integer provinceId,
+            @RequestParam(required = false) Integer districtId,
+            @RequestParam(required = false) String wardCode
+    ) {
+        return ApiResponse.<List<PickupStoreResponse>>builder()
+                .code(200)
+                .message("Success")
+                .result(inventoryService.findPickupStores(productVariantId, quantity, provinceId, districtId, wardCode))
                 .build();
     }
 

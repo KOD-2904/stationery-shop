@@ -16,6 +16,7 @@ public class ShippingFeeResponse {
     private String addressId;
     private ShippingProvider provider;
     private BigDecimal shippingFee;
+    private BigDecimal insuranceValue;
     private Integer serviceId;
     private Integer serviceTypeId;
     private Integer weight;
