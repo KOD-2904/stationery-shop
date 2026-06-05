@@ -17,6 +17,8 @@ public class OrderResponse {
     private DeliveryMethod deliveryMethod;
     private BigDecimal subtotal;
     private BigDecimal shippingFee;
+    private String voucherCode;
+    private BigDecimal discountAmount;
     private BigDecimal totalAmount;
     private String receiverName;
     private String receiverPhone;

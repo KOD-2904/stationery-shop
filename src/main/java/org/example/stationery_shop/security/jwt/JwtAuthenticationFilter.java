@@ -38,6 +38,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String requestPath = request.getServletPath();
+
+        if (isLogoutRequest(request, requestPath)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String jwtToken = getTokenFromRequest(request, requestPath);
 
         if (jwtToken == null) {
@@ -84,9 +90,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             List<GrantedAuthority> authorities = new ArrayList<>();
             roles.forEach(role -> authorities.add(new SimpleGrantedAuthority(role)));
             permissions.forEach(permission -> authorities.add(new SimpleGrantedAuthority(permission)));
-            for (GrantedAuthority authority : authorities) {
-                log.warn("authority: {}", authority.getAuthority().toString());
-            }
+//            for (GrantedAuthority authority : authorities) {
+//                log.warn("authority: {}", authority.getAuthority().toString());
+//            }
             UsernamePasswordAuthenticationToken authToken =
                     new UsernamePasswordAuthenticationToken(
                             claims.getSubject(),
@@ -97,10 +103,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
             SecurityContextHolder.getContext().setAuthentication(authToken);
-            log.warn("path: {}, method: {}", request.getServletPath(), request.getMethod());
-            log.warn("token exists: {}", jwtToken != null);
-            log.warn("tokenType: {}", tokenType);
-            log.warn("security auth after set: {}", SecurityContextHolder.getContext().getAuthentication());
+//            log.warn("path: {}, method: {}", request.getServletPath(), request.getMethod());
+//            log.warn("token exists: {}", jwtToken != null);
+//            log.warn("tokenType: {}", tokenType);
+//            log.warn("security auth after set: {}", SecurityContextHolder.getContext().getAuthentication());
 
             filterChain.doFilter(request, response);
         } catch (ExpiredJwtException e) {
@@ -124,6 +130,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         ObjectMapper objectMapper = new ObjectMapper();
         response.getWriter().write(objectMapper.writeValueAsString(apiResponse));
+    }
+
+    private boolean isLogoutRequest(HttpServletRequest request, String requestPath) {
+        return "POST".equalsIgnoreCase(request.getMethod())
+                && ("/api/auth/logout".equals(requestPath) || "/api/auth/logout-all".equals(requestPath));
     }
 
     private String getTokenFromRequest(HttpServletRequest request, String requestPath) {

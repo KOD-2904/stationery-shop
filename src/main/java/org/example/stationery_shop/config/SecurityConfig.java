@@ -57,6 +57,7 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.GET, "/api/product-variants/**").permitAll()
                             .requestMatchers(HttpMethod.GET, "/api/stores/**").permitAll()
                             .requestMatchers(HttpMethod.GET, "/api/inventory/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/ghn/**").permitAll()
                             .requestMatchers(HttpMethod.GET, "/api/payment/vnpay-callback").permitAll()
                             .requestMatchers(HttpMethod.GET, "/api/payment/vnpay-ipn").permitAll()
                             .requestMatchers(HttpMethod.POST, "/api/payment/vnpay-ipn").permitAll()

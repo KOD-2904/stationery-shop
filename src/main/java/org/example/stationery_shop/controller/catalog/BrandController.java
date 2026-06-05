@@ -8,6 +8,7 @@ import org.example.stationery_shop.dto.response.BrandResponse;
 import org.example.stationery_shop.service.CatalogService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -57,6 +58,19 @@ public class BrandController {
                 .code(200)
                 .message("Updated brand successfully")
                 .result(catalogService.updateBrand(id, request))
+                .build();
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
+    @PatchMapping("/{id}/active")
+    public ApiResponse<BrandResponse> updateBrandActive(
+            @PathVariable String id,
+            @RequestParam boolean active
+    ) {
+        return ApiResponse.<BrandResponse>builder()
+                .code(200)
+                .message("Updated brand status successfully")
+                .result(catalogService.updateBrandActive(id, active))
                 .build();
     }
 

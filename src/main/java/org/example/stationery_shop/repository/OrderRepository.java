@@ -16,4 +16,12 @@ public interface OrderRepository extends JpaRepository<Order, String> {
 
     @EntityGraph(attributePaths = {"items", "items.productVariant", "items.productVariant.product", "address", "store", "shippingFeeSnapshot"})
     List<Order> findByUserIdOrderByCreatedAtDesc(String userId);
+
+    @EntityGraph(attributePaths = {"items", "items.productVariant", "items.productVariant.product", "address", "store", "shippingFeeSnapshot"})
+    List<Order> findAllByOrderByCreatedAtDesc();
+
+    @EntityGraph(attributePaths = {"items", "items.productVariant", "items.productVariant.product", "address", "store", "shippingFeeSnapshot"})
+    List<Order> findByStatusOrderByCreatedAtDesc(org.example.stationery_shop.enums.OrderStatus status);
+
+    long countByStatus(org.example.stationery_shop.enums.OrderStatus status);
 }

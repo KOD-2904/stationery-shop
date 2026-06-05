@@ -14,4 +14,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     Optional<ProductVariant> findWithProductById(String id);
 
     List<ProductVariant> findByProductIdOrderBySizeAsc(String productId);
+
+    long countByActiveTrue();
 }

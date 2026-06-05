@@ -30,6 +30,7 @@ import org.example.stationery_shop.repository.PaymentRepository;
 import org.example.stationery_shop.repository.PaymentWebhookLogRepository;
 import org.example.stationery_shop.repository.ShipmentRepository;
 import org.example.stationery_shop.service.PaymentCallbackService;
+import org.example.stationery_shop.service.VoucherService;
 import org.example.stationery_shop.service.payment.VnPayService;
 import org.example.stationery_shop.service.shipping.GhnClient;
 import org.example.stationery_shop.service.shipping.GhnCreateOrderResult;
@@ -62,6 +63,7 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
     private final ShipmentRepository shipmentRepository;
     private final GhnClient ghnClient;
     private final GhnProperties ghnProperties;
+    private final VoucherService voucherService;
     private final PlatformTransactionManager transactionManager;
 
     @Override
@@ -117,6 +119,7 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
             getOrCreateShipment(order, order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
                     ? ShippingStatus.NOT_REQUIRED
                     : ShippingStatus.PENDING);
+            voucherService.recordUsage(order.getVoucherCode(), order.getId());
         } else {
             payment.setStatus(PaymentStatus.FAILED);
             payment.setProviderTransactionId(params.get("vnp_TransactionNo"));

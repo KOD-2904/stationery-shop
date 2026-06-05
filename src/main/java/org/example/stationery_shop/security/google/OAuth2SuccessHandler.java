@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.stationery_shop.config.FrontendProperties;
 import org.example.stationery_shop.entity.auth.Role;
 import org.example.stationery_shop.entity.auth.User;
 import org.example.stationery_shop.enums.UserStatus;
@@ -34,6 +35,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final RedisServiceImpl redisService;
+    private final FrontendProperties frontendProperties;
     @Override
     public void onAuthenticationSuccess(
             HttpServletRequest request,
@@ -130,6 +132,6 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         response.addCookie(accessCookie);
         response.addCookie(refreshCookie);
 
-        response.sendRedirect("/api/auth/oauth2/success");
+        response.sendRedirect(frontendProperties.getBaseUrl());
     }
 }

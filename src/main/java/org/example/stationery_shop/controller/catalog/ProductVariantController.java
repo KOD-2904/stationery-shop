@@ -9,6 +9,7 @@ import org.example.stationery_shop.dto.response.ProductVariantImageResponse;
 import org.example.stationery_shop.service.CatalogService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -46,6 +47,18 @@ public class ProductVariantController {
                 .code(200)
                 .message("Updated product variant successfully")
                 .result(catalogService.updateVariant(id, request))
+                .build();
+    }
+
+    @PatchMapping("/product-variants/{id}/active")
+    public ApiResponse<ProductVariantResponse> updateVariantActive(
+            @PathVariable String id,
+            @RequestParam boolean active
+    ) {
+        return ApiResponse.<ProductVariantResponse>builder()
+                .code(200)
+                .message("Updated product variant status successfully")
+                .result(catalogService.updateVariantActive(id, active))
                 .build();
     }
 

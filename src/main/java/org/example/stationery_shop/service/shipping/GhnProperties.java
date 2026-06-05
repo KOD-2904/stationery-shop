@@ -13,6 +13,9 @@ import java.math.BigDecimal;
 @ConfigurationProperties(prefix = "ghn")
 public class GhnProperties {
     private boolean enabled;
+    private boolean mockEnabled;
+    private boolean masterDataMockEnabled;
+    private boolean orderMockEnabled;
     private String baseUrl;
     private String token;
     private Integer shopId;
@@ -26,4 +29,12 @@ public class GhnProperties {
     private BigDecimal maxInsuranceValue;
     private BigDecimal maxCodAmount;
     private BigDecimal maxFeeDifference = BigDecimal.ZERO;
+
+    public boolean shouldMockMasterData() {
+        return masterDataMockEnabled;
+    }
+
+    public boolean shouldMockOrder() {
+        return orderMockEnabled || mockEnabled;
+    }
 }

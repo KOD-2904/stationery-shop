@@ -90,13 +90,16 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response
     ) {
-        String refreshToken = getRefreshTokenFromRequest(request);
-        if (refreshToken == null) {
-            throw new AppException(ErrorCode.TOKEN_NOT_FOUND);
+        try {
+            String refreshToken = getRefreshTokenFromRequest(request);
+            if (refreshToken != null) {
+                authService.logoutOneDevice(refreshToken);
+            }
+        } catch (Exception ignored) {
+            // Logout should still clear browser cookies when the Redis session is already gone.
+        } finally {
+            clearTokenCookies(response);
         }
-
-        authService.logoutOneDevice(refreshToken);
-        clearTokenCookies(response);
 
         return ApiResponse.<Void>builder()
                 .code(200)
@@ -109,13 +112,16 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response
     ) {
-        String refreshToken = getRefreshTokenFromRequest(request);
-        if (refreshToken == null) {
-            throw new AppException(ErrorCode.TOKEN_NOT_FOUND);
+        try {
+            String refreshToken = getRefreshTokenFromRequest(request);
+            if (refreshToken != null) {
+                authService.logoutAllDevices(refreshToken);
+            }
+        } catch (Exception ignored) {
+            // Logout-all should still clear browser cookies when the Redis session is already gone.
+        } finally {
+            clearTokenCookies(response);
         }
-
-        authService.logoutAllDevices(refreshToken);
-        clearTokenCookies(response);
 
         return ApiResponse.<Void>builder()
                 .code(200)

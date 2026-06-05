@@ -3,6 +3,7 @@ package org.example.stationery_shop.service.shipping;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.example.stationery_shop.dto.response.checkout.ShippingServiceResponse;
 import org.example.stationery_shop.entity.checkout.ShippingFeeSnapshot;
 import org.example.stationery_shop.entity.customer.Address;
 import org.example.stationery_shop.entity.inventory.Store;
@@ -18,6 +19,7 @@ import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -25,10 +27,15 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GhnClient {
     private static final String FEE_PATH = "/shiip/public-api/v2/shipping-order/fee";
+    private static final String AVAILABLE_SERVICES_PATH = "/shiip/public-api/v2/shipping-order/available-services";
     private static final String CREATE_ORDER_PATH = "/shiip/public-api/v2/shipping-order/create";
     private static final String ORDER_DETAIL_PATH = "/shiip/public-api/v2/shipping-order/detail";
+    private static final String PROVINCE_PATH = "/shiip/public-api/master-data/province";
+    private static final String DISTRICT_PATH = "/shiip/public-api/master-data/district";
+    private static final String WARD_PATH = "/shiip/public-api/master-data/ward";
     private static final int SHOP_PAYS_SHIPPING_FEE = 1;
     private static final String REQUIRED_NOTE_NO_VIEW = "KHONGCHOXEMHANG";
+    private static final BigDecimal MOCK_SHIPPING_FEE = BigDecimal.valueOf(30000);
 
     private final GhnProperties properties;
     private final RestClient.Builder restClientBuilder;
@@ -36,6 +43,9 @@ public class GhnClient {
 
     public GhnFeeResult calculateFee(Store store, Address address, Integer weight, Integer length, Integer width, Integer height,
                                      Integer serviceId, Integer serviceTypeId, BigDecimal insuranceValue) {
+        if (properties.shouldMockOrder()) {
+            return mockFeeResult(serviceId, serviceTypeId);
+        }
         validateBasicConfig();
         validateStoreAddress(store);
         Integer effectiveServiceTypeId = resolveServiceTypeId(serviceId, serviceTypeId);
@@ -65,7 +75,44 @@ public class GhnClient {
         }
     }
 
+    public List<ShippingServiceResponse> getAvailableServices(Store store, Address address) {
+        if (properties.shouldMockOrder()) {
+            return List.of(mockShippingService());
+        }
+        validateBasicConfig();
+        validateStoreAddress(store);
+        Map<String, Object> request = Map.of(
+                "shop_id", properties.getShopId(),
+                "from_district", store.getDistrictId(),
+                "to_district", address.getDistrictId()
+        );
+        try {
+            JsonNode data = post(AVAILABLE_SERVICES_PATH, request).path("data");
+            if (!data.isArray()) {
+                return List.of();
+            }
+            List<ShippingServiceResponse> services = new java.util.ArrayList<>();
+            for (JsonNode item : data) {
+                services.add(ShippingServiceResponse.builder()
+                        .serviceId(readNullableInt(item, "service_id", null))
+                        .serviceTypeId(readNullableInt(item, "service_type_id", properties.getDefaultServiceTypeId()))
+                        .name(readNullableText(item, "service_name"))
+                        .shortName(readNullableText(item, "short_name"))
+                        .build());
+            }
+            return services;
+        } catch (RestClientException exception) {
+            throw new AppException(ErrorCode.GHN_CALCULATE_FEE_FAILED, exception.getMessage());
+        }
+    }
+
     public GhnCreateOrderResult createOrder(Order order, ShippingFeeSnapshot snapshot, PaymentMethod paymentMethod) {
+        if (properties.shouldMockOrder()) {
+            return GhnCreateOrderResult.builder()
+                    .orderCode("MOCK-GHN-" + order.getId())
+                    .totalFee(snapshot.getShippingFee() == null ? MOCK_SHIPPING_FEE : snapshot.getShippingFee())
+                    .build();
+        }
         validateCreateOrderConfig();
         Address address = order.getAddress();
         if (address == null) {
@@ -112,6 +159,12 @@ public class GhnClient {
     }
 
     public GhnOrderInfoResult getOrderInfo(String orderCode) {
+        if (properties.shouldMockOrder()) {
+            if (!StringUtils.hasText(orderCode)) {
+                throw new AppException(ErrorCode.GHN_ORDER_CODE_NOT_EXIST);
+            }
+            return mockOrderInfo(orderCode);
+        }
         validateBasicConfig();
         if (!StringUtils.hasText(orderCode)) {
             throw new AppException(ErrorCode.GHN_ORDER_CODE_NOT_EXIST);
@@ -157,6 +210,42 @@ public class GhnClient {
         }
     }
 
+    public JsonNode getProvinces() {
+        if (properties.shouldMockMasterData()) {
+            return objectMapper.valueToTree(List.of(Map.of("ProvinceID", 202, "ProvinceName", "Da Nang")));
+        }
+        validateBasicConfig();
+        try {
+            return get(PROVINCE_PATH, Map.of()).path("data");
+        } catch (RestClientException exception) {
+            throw new AppException(ErrorCode.GHN_GET_ORDER_FAILED, exception.getMessage());
+        }
+    }
+
+    public JsonNode getDistricts(Integer provinceId) {
+        if (properties.shouldMockMasterData()) {
+            return objectMapper.valueToTree(List.of(Map.of("DistrictID", 1524, "DistrictName", "Hai Chau", "ProvinceID", provinceId)));
+        }
+        validateBasicConfig();
+        try {
+            return get(DISTRICT_PATH, Map.of("province_id", provinceId)).path("data");
+        } catch (RestClientException exception) {
+            throw new AppException(ErrorCode.GHN_GET_ORDER_FAILED, exception.getMessage());
+        }
+    }
+
+    public JsonNode getWards(Integer districtId) {
+        if (properties.shouldMockMasterData()) {
+            return objectMapper.valueToTree(List.of(Map.of("WardCode", "40101", "WardName", "Thach Thang", "DistrictID", districtId)));
+        }
+        validateBasicConfig();
+        try {
+            return get(WARD_PATH, Map.of("district_id", districtId)).path("data");
+        } catch (RestClientException exception) {
+            throw new AppException(ErrorCode.GHN_GET_ORDER_FAILED, exception.getMessage());
+        }
+    }
+
     private JsonNode post(String path, Map<String, Object> request) {
         String responseBody = restClientBuilder.baseUrl(properties.getBaseUrl())
                 .build()
@@ -165,6 +254,26 @@ public class GhnClient {
                 .header("Token", properties.getToken())
                 .header("ShopId", String.valueOf(properties.getShopId()))
                 .body(request)
+                .retrieve()
+                .body(String.class);
+        JsonNode response = readJson(responseBody);
+        if (response == null || response.path("code").asInt() != 200) {
+            String message = response == null ? "Empty GHN response" : response.path("message").asText();
+            throw new RestClientException(message);
+        }
+        return response;
+    }
+
+    private JsonNode get(String path, Map<String, Object> params) {
+        String responseBody = restClientBuilder.baseUrl(properties.getBaseUrl())
+                .build()
+                .get()
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder.path(path);
+                    params.forEach(builder::queryParam);
+                    return builder.build();
+                })
+                .header("Token", properties.getToken())
                 .retrieve()
                 .body(String.class);
         JsonNode response = readJson(responseBody);
@@ -187,6 +296,9 @@ public class GhnClient {
     }
 
     private void validateBasicConfig() {
+        if (properties.shouldMockOrder()) {
+            return;
+        }
         if (!properties.isEnabled()
                 || !StringUtils.hasText(properties.getBaseUrl())
                 || !StringUtils.hasText(properties.getToken())
@@ -200,6 +312,9 @@ public class GhnClient {
     }
 
     private void validateStoreAddress(Store store) {
+        if (properties.shouldMockOrder()) {
+            return;
+        }
         if (store == null
                 || store.getDistrictId() == null
                 || !StringUtils.hasText(store.getWardCode())
@@ -216,6 +331,43 @@ public class GhnClient {
         }
         // GHN service_type_id=2 is used as the temporary default until the frontend supports service selection.
         return serviceTypeId == null ? properties.getDefaultServiceTypeId() : serviceTypeId;
+    }
+
+    private GhnFeeResult mockFeeResult(Integer serviceId, Integer serviceTypeId) {
+        return GhnFeeResult.builder()
+                .fee(MOCK_SHIPPING_FEE)
+                .serviceId(serviceId == null ? 53320 : serviceId)
+                .serviceTypeId(resolveServiceTypeId(serviceId, serviceTypeId))
+                .build();
+    }
+
+    private ShippingServiceResponse mockShippingService() {
+        return ShippingServiceResponse.builder()
+                .serviceId(53320)
+                .serviceTypeId(properties.getDefaultServiceTypeId())
+                .name("GHN Mock Standard")
+                .shortName("MOCK")
+                .build();
+    }
+
+    private GhnOrderInfoResult mockOrderInfo(String orderCode) {
+        String now = Instant.now().toString();
+        return GhnOrderInfoResult.builder()
+                .orderCode(orderCode)
+                .status("created")
+                .statusName("Mock created")
+                .action("mock")
+                .expectedDeliveryTime(now)
+                .estimatedFromTime(now)
+                .estimatedToTime(now)
+                .pickupTime(now)
+                .orderDate(now)
+                .updatedDate(now)
+                .totalFee(MOCK_SHIPPING_FEE)
+                .codAmount(BigDecimal.ZERO)
+                .lastLogStatus("created")
+                .lastLogUpdatedDate(now)
+                .build();
     }
 
     private Map<String, Object> defaultItem(Integer weight, Integer length, Integer width, Integer height) {
