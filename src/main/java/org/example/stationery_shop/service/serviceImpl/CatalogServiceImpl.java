@@ -107,6 +107,15 @@ public class CatalogServiceImpl implements CatalogService {
 
     @Override
     @Transactional
+    public BrandResponse updateBrandActive(String id, boolean active) {
+        Brand brand = brandRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.BRAND_NOT_EXIST));
+        brand.setActive(active);
+        return catalogMapper.toBrandResponse(brandRepository.save(brand));
+    }
+
+    @Override
+    @Transactional
     public BrandResponse uploadBrandLogo(String id, MultipartFile file) {
         Brand brand = brandRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.BRAND_NOT_EXIST));
@@ -153,6 +162,15 @@ public class CatalogServiceImpl implements CatalogService {
         if (request.getActive() != null) {
             category.setActive(request.getActive());
         }
+        return catalogMapper.toCategoryResponse(categoryRepository.save(category));
+    }
+
+    @Override
+    @Transactional
+    public CategoryResponse updateCategoryActive(String id, boolean active) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_EXIST));
+        category.setActive(active);
         return catalogMapper.toCategoryResponse(categoryRepository.save(category));
     }
 
@@ -232,6 +250,16 @@ public class CatalogServiceImpl implements CatalogService {
 
     @Override
     @Transactional
+    public ProductResponse updateProductActive(String id, boolean active) {
+        Product product = productRepository.findWithBrandAndCategoryById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_EXIST));
+        product.setActive(active);
+        Product savedProduct = productRepository.save(product);
+        return getProduct(savedProduct.getId());
+    }
+
+    @Override
+    @Transactional
     public ProductResponse uploadProductThumbnail(String id, MultipartFile file) {
         Product product = productRepository.findWithBrandAndCategoryById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_EXIST));
@@ -295,6 +323,15 @@ public class CatalogServiceImpl implements CatalogService {
         if (request.getActive() != null) {
             variant.setActive(request.getActive());
         }
+        return catalogMapper.toProductVariantResponse(productVariantRepository.save(variant));
+    }
+
+    @Override
+    @Transactional
+    public ProductVariantResponse updateVariantActive(String id, boolean active) {
+        ProductVariant variant = productVariantRepository.findWithProductById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_VARIANT_NOT_EXIST));
+        variant.setActive(active);
         return catalogMapper.toProductVariantResponse(productVariantRepository.save(variant));
     }
 

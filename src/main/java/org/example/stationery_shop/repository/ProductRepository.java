@@ -19,4 +19,6 @@ public interface ProductRepository extends JpaRepository<Product, String> {
 
     @EntityGraph(attributePaths = {"brand", "category"})
     Optional<Product> findWithBrandAndCategoryById(String id);
+
+    long countByActiveTrue();
 }

@@ -9,6 +9,7 @@ import org.example.stationery_shop.dto.response.ProductResponse;
 import org.example.stationery_shop.service.CatalogService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -67,6 +68,19 @@ public class ProductController {
                 .code(200)
                 .message("Updated product successfully")
                 .result(catalogService.updateProduct(id, request))
+                .build();
+    }
+
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
+    @PatchMapping("/{id}/active")
+    public ApiResponse<ProductResponse> updateProductActive(
+            @PathVariable String id,
+            @RequestParam boolean active
+    ) {
+        return ApiResponse.<ProductResponse>builder()
+                .code(200)
+                .message("Updated product status successfully")
+                .result(catalogService.updateProductActive(id, active))
                 .build();
     }
 

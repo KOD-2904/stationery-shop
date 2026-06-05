@@ -19,22 +19,26 @@ public interface CatalogService {
     List<BrandResponse> getBrands(boolean includeInactive);
     BrandResponse createBrand(BrandRequest request);
     BrandResponse updateBrand(String id, BrandRequest request);
+    BrandResponse updateBrandActive(String id, boolean active);
     BrandResponse uploadBrandLogo(String id, MultipartFile file);
 
     List<CategoryResponse> getCategories(boolean includeInactive);
     CategoryResponse createCategory(CategoryRequest request);
     CategoryResponse updateCategory(String id, CategoryRequest request);
+    CategoryResponse updateCategoryActive(String id, boolean active);
     CategoryResponse uploadCategoryImage(String id, MultipartFile file);
 
     List<ProductResponse> getProducts(boolean includeInactive);
     ProductResponse getProduct(String id);
     ProductResponse createProduct(ProductRequest request);
     ProductResponse updateProduct(String id, ProductRequest request);
+    ProductResponse updateProductActive(String id, boolean active);
     ProductResponse uploadProductThumbnail(String id, MultipartFile file);
     ProductImageResponse uploadProductImage(String productId, MultipartFile file, boolean primaryImage, Integer sortOrder);
 
     ProductVariantResponse createVariant(String productId, ProductVariantRequest request);
     ProductVariantResponse updateVariant(String id, ProductVariantRequest request);
+    ProductVariantResponse updateVariantActive(String id, boolean active);
     ProductVariantResponse uploadVariantMainImage(String id, MultipartFile file);
     ProductVariantImageResponse uploadVariantImage(String id, MultipartFile file, boolean primaryImage, Integer sortOrder);
 

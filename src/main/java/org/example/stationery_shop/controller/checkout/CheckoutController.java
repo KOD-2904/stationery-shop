@@ -10,12 +10,15 @@ import org.example.stationery_shop.dto.request.checkout.ShippingFeeRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.checkout.CheckoutResponse;
 import org.example.stationery_shop.dto.response.checkout.ShippingFeeResponse;
+import org.example.stationery_shop.dto.response.checkout.ShippingServiceResponse;
 import org.example.stationery_shop.service.CheckoutService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -39,6 +42,15 @@ public class CheckoutController {
                 .code(200)
                 .message("Calculated shipping fee successfully")
                 .result(checkoutService.calculateShippingFeeFromCart(request))
+                .build();
+    }
+
+    @PostMapping("/shipping-services/from-cart")
+    public ApiResponse<List<ShippingServiceResponse>> getShippingServicesFromCart(@Valid @RequestBody CartShippingFeeRequest request) {
+        return ApiResponse.<List<ShippingServiceResponse>>builder()
+                .code(200)
+                .message("Loaded shipping services successfully")
+                .result(checkoutService.getShippingServicesFromCart(request))
                 .build();
     }
 

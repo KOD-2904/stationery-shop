@@ -14,6 +14,8 @@ public class CheckoutResponse {
     private String orderId;
     private String paymentId;
     private PaymentMethod paymentMethod;
+    private String voucherCode;
+    private BigDecimal discountAmount;
     private BigDecimal totalAmount;
     private String paymentUrl;
     private List<UnavailableCartItemResponse> unavailableItems;

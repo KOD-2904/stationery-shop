@@ -17,6 +17,7 @@ public class CheckoutRequest {
     private PaymentMethod paymentMethod;
     private String addressId;
     private String shippingFeeSnapshotId;
+    private String voucherCode;
     private String note;
 
     @Valid

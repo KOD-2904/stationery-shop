@@ -55,7 +55,8 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return user.getStatus() != UserStatus.BANNED;
+        return user.getStatus() != UserStatus.BANNED
+                && user.getStatus() != UserStatus.TEMP_LOCKED;
     }
 
     @Override

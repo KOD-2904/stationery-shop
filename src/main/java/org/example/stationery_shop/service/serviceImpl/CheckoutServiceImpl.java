@@ -8,7 +8,9 @@ import org.example.stationery_shop.dto.request.checkout.CheckoutRequest;
 import org.example.stationery_shop.dto.request.checkout.ShippingFeeRequest;
 import org.example.stationery_shop.dto.response.checkout.CheckoutResponse;
 import org.example.stationery_shop.dto.response.checkout.ShippingFeeResponse;
+import org.example.stationery_shop.dto.response.checkout.ShippingServiceResponse;
 import org.example.stationery_shop.dto.response.cart.UnavailableCartItemResponse;
+import org.example.stationery_shop.dto.response.voucher.VoucherValidationResponse;
 import org.example.stationery_shop.entity.auth.User;
 import org.example.stationery_shop.entity.cart.CartItem;
 import org.example.stationery_shop.entity.catalog.ProductVariant;
@@ -47,6 +49,7 @@ import org.example.stationery_shop.repository.ShippingFeeSnapshotRepository;
 import org.example.stationery_shop.repository.StoreRepository;
 import org.example.stationery_shop.service.CheckoutService;
 import org.example.stationery_shop.service.CurrentUserService;
+import org.example.stationery_shop.service.VoucherService;
 import org.example.stationery_shop.service.payment.VnPayService;
 import org.example.stationery_shop.service.shipping.GhnClient;
 import org.example.stationery_shop.service.shipping.GhnCreateOrderResult;
@@ -87,6 +90,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final GhnProperties ghnProperties;
     private final ShipmentRepository shipmentRepository;
     private final CartItemRepository cartItemRepository;
+    private final VoucherService voucherService;
 
 
     @Override
@@ -155,6 +159,22 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ShippingServiceResponse> getShippingServicesFromCart(CartShippingFeeRequest request) {
+        User user = currentUserService.getCurrentUser();
+        if (request.getDeliveryMethod() != DeliveryMethod.SHIP_TO_HOME) {
+            return List.of();
+        }
+        if (request.getAddressId() == null || request.getAddressId().isBlank()) {
+            throw new AppException(ErrorCode.ADDRESS_REQUIRED);
+        }
+        Address address = addressRepository.findByIdAndUserId(request.getAddressId(), user.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_EXIST));
+        Store store = resolveStoreFromItems(toCheckoutItems(loadSelectedCartItems(request.getCartItemIds())));
+        return ghnClient.getAvailableServices(store, address);
+    }
+
+    @Override
     @Transactional
     public CheckoutResponse checkout(CheckoutRequest request, String clientIp) {
         User user = currentUserService.getCurrentUser();
@@ -169,6 +189,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .address(address)
                 .shippingFeeSnapshot(snapshot)
                 .shippingFee(snapshot.getShippingFee())
+                .voucherCode(normalizeVoucherCode(request.getVoucherCode()))
+                .discountAmount(BigDecimal.ZERO)
                 .subtotal(BigDecimal.ZERO)
                 .totalAmount(BigDecimal.ZERO)
                 .receiverName(address == null ? user.getName() : address.getReceiverName())
@@ -179,9 +201,11 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .build();
 
         BigDecimal subtotal = BigDecimal.ZERO;
+        List<String> productIds = new ArrayList<>();
         for (CheckoutItemRequest itemRequest : request.getItems()) {
             ProductVariant variant = productVariantRepository.findWithProductById(itemRequest.getProductVariantId())
                     .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_VARIANT_NOT_EXIST));
+            productIds.add(variant.getProduct().getId());
             BigDecimal lineTotal = variant.getPrice().multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
             subtotal = subtotal.add(lineTotal);
             OrderItem item = OrderItem.builder()
@@ -196,9 +220,11 @@ public class CheckoutServiceImpl implements CheckoutService {
                     .build();
             order.getItems().add(item);
         }
+        BigDecimal discountAmount = calculateDiscountAmount(order.getVoucherCode(), subtotal, productIds);
         order.setStore(checkoutStore);
         order.setSubtotal(subtotal);
-        order.setTotalAmount(subtotal.add(snapshot.getShippingFee()));
+        order.setDiscountAmount(discountAmount);
+        order.setTotalAmount(subtotal.add(snapshot.getShippingFee()).subtract(discountAmount));
         validateCodAmount(request.getPaymentMethod(), order.getTotalAmount());
         Order savedOrder = orderRepository.save(order);
         orderStatusHistoryRepository.save(OrderStatusHistory.builder()
@@ -225,6 +251,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             paymentUrl = vnPayService.createPaymentUrl(savedOrder, clientIp);
         } else {
             updateOrderStatus(savedOrder, OrderStatus.PROCESSING, "COD checkout created");
+            voucherService.recordUsage(savedOrder.getVoucherCode(), savedOrder.getId());
             Shipment shipment = getOrCreateShipment(savedOrder, request.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
                     ? ShippingStatus.NOT_REQUIRED
                     : ShippingStatus.PENDING);
@@ -236,6 +263,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .orderId(savedOrder.getId())
                 .paymentId(payment.getId())
                 .paymentMethod(request.getPaymentMethod())
+                .voucherCode(savedOrder.getVoucherCode())
+                .discountAmount(savedOrder.getDiscountAmount())
                 .totalAmount(savedOrder.getTotalAmount())
                 .paymentUrl(paymentUrl)
                 .build();
@@ -272,6 +301,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         checkoutRequest.setPaymentMethod(request.getPaymentMethod());
         checkoutRequest.setAddressId(request.getAddressId());
         checkoutRequest.setShippingFeeSnapshotId(request.getShippingFeeSnapshotId());
+        checkoutRequest.setVoucherCode(request.getVoucherCode());
         checkoutRequest.setNote(request.getNote());
         checkoutRequest.setItems(toCheckoutItems(selectedItems));
         CheckoutResponse response = checkout(checkoutRequest, clientIp);
@@ -456,6 +486,18 @@ public class CheckoutServiceImpl implements CheckoutService {
                 && totalAmount.compareTo(maxCodAmount) > 0) {
             throw new AppException(ErrorCode.COD_NOT_ALLOWED_HIGH_VALUE);
         }
+    }
+
+    private BigDecimal calculateDiscountAmount(String voucherCode, BigDecimal subtotal, List<String> productIds) {
+        if (!StringUtils.hasText(voucherCode)) {
+            return BigDecimal.ZERO;
+        }
+        VoucherValidationResponse validation = voucherService.validateVoucher(voucherCode, subtotal, productIds);
+        return validation.getDiscountAmount();
+    }
+
+    private String normalizeVoucherCode(String voucherCode) {
+        return StringUtils.hasText(voucherCode) ? voucherCode.trim().toUpperCase(java.util.Locale.ROOT) : null;
     }
 
     private Store resolveStoreFromItems(List<CheckoutItemRequest> items) {

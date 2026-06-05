@@ -7,8 +7,11 @@ import org.example.stationery_shop.dto.request.RegisterRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.UserResponse;
 import org.example.stationery_shop.entity.auth.User;
+import org.example.stationery_shop.exception.AppException;
+import org.example.stationery_shop.exception.ErrorCode;
 import org.example.stationery_shop.mapper.UserMapper;
 
+import org.example.stationery_shop.repository.UserRepository;
 import org.example.stationery_shop.service.serviceImpl.auth.UserServiceImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
     private final UserServiceImpl userService;
     private final UserMapper userMapper;
+    private final UserRepository userRepository;
 
     @PostMapping("/register")
     public ApiResponse<UserResponse> register(
@@ -61,6 +65,18 @@ public class UserController {
         return ApiResponse.builder()
                 .code(200)
                 .message("Send Successfully")
+                .build();
+    }
+
+    @GetMapping("/me")
+    public ApiResponse<UserResponse> me(Authentication authentication) {
+        User user = userRepository.findWithRolesByEmail(authentication.getName())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXIST));
+
+        return ApiResponse.<UserResponse>builder()
+                .code(200)
+                .message("Current user")
+                .result(userMapper.toResponse(user))
                 .build();
     }
 }

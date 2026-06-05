@@ -65,6 +65,12 @@ public class Order extends BaseEntity {
     @Column(name = "shipping_fee", nullable = false, precision = 18, scale = 2)
     private BigDecimal shippingFee;
 
+    @Column(name = "voucher_code", length = 100)
+    private String voucherCode;
+
+    @Column(name = "discount_amount", nullable = false, precision = 18, scale = 2)
+    private BigDecimal discountAmount;
+
     @Column(name = "total_amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal totalAmount;
 

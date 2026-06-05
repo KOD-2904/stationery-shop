@@ -104,7 +104,7 @@ public class AuthServiceImpl implements AuthService {
 
         User user = userRepository.findWithRolesById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXIST));
-        if (user.getStatus() == UserStatus.BANNED) {
+        if (user.getStatus() == UserStatus.BANNED || user.getStatus() == UserStatus.TEMP_LOCKED) {
             redisService.logoutAllDevices(user.getId());
             throw new AppException(ErrorCode.ACCOUNT_LOCKED);
         }

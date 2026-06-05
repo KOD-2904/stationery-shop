@@ -18,6 +18,7 @@ public class CartCheckoutRequest {
 
     private String addressId;
     private String shippingFeeSnapshotId;
+    private String voucherCode;
     private String note;
 
     @NotEmpty(message = "Cart item id khong duoc rong")

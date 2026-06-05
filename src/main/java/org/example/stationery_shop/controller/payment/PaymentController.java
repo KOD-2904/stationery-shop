@@ -1,7 +1,8 @@
 package org.example.stationery_shop.controller.payment;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.example.stationery_shop.dto.response.ApiResponse;
+import org.example.stationery_shop.config.FrontendProperties;
 import org.example.stationery_shop.exception.AppException;
 import org.example.stationery_shop.exception.ErrorCode;
 import org.example.stationery_shop.service.PaymentCallbackService;
@@ -10,7 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.IOException;
 import java.util.Map;
 
 @RestController
@@ -18,14 +21,16 @@ import java.util.Map;
 @RequestMapping("/api/payment")
 public class PaymentController {
     private final PaymentCallbackService paymentCallbackService;
+    private final FrontendProperties frontendProperties;
 
     @GetMapping("/vnpay-callback")
-    public ApiResponse<String> vnpayReturn(@RequestParam Map<String, String> params) {
-        return ApiResponse.<String>builder()
-                .code(200)
-                .message("Success")
-                .result(paymentCallbackService.handleVnPayCallback(params))
-                .build();
+    public void vnpayReturn(@RequestParam Map<String, String> params, HttpServletResponse response) throws IOException {
+        try {
+            paymentCallbackService.handleVnPayCallback(params);
+            response.sendRedirect(buildPaymentRedirectUrl(params, "success", null));
+        } catch (AppException exception) {
+            response.sendRedirect(buildPaymentRedirectUrl(params, "failed", exception.getErrorCode().name()));
+        }
     }
 
     @GetMapping("/vnpay-ipn")
@@ -64,5 +69,20 @@ public class PaymentController {
 
     private Map<String, String> vnpayIpnResponse(String code, String message) {
         return Map.of("RspCode", code, "Message", message);
+    }
+
+    private String buildPaymentRedirectUrl(Map<String, String> params, String status, String error) {
+        UriComponentsBuilder builder = UriComponentsBuilder
+                .fromUriString(frontendProperties.getBaseUrl())
+                .queryParam("paymentStatus", status);
+
+        String orderId = params.get("vnp_TxnRef");
+        if (orderId != null && !orderId.isBlank()) {
+            builder.queryParam("orderId", orderId);
+        }
+        if (error != null && !error.isBlank()) {
+            builder.queryParam("paymentError", error);
+        }
+        return builder.build().toUriString();
     }
 }
