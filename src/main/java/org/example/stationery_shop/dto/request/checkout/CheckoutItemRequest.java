@@ -10,7 +10,6 @@ public class CheckoutItemRequest {
     @NotBlank(message = "Product variant id khong duoc rong")
     private String productVariantId;
 
-    @NotBlank(message = "Store id khong duoc rong")
     private String storeId;
 
     @NotNull(message = "Quantity khong duoc rong")

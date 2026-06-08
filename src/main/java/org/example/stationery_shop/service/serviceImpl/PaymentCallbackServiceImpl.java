@@ -10,7 +10,10 @@ import org.example.stationery_shop.entity.order.Order;
 import org.example.stationery_shop.entity.order.OrderStatusHistory;
 import org.example.stationery_shop.entity.payment.Payment;
 import org.example.stationery_shop.entity.payment.PaymentWebhookLog;
+import org.example.stationery_shop.entity.shipping.Carrier;
+import org.example.stationery_shop.entity.shipping.CarrierAssignment;
 import org.example.stationery_shop.entity.shipping.Shipment;
+import org.example.stationery_shop.enums.CarrierAssignmentStatus;
 import org.example.stationery_shop.enums.DeliveryMethod;
 import org.example.stationery_shop.enums.InventoryTransactionType;
 import org.example.stationery_shop.enums.OrderStatus;
@@ -28,9 +31,12 @@ import org.example.stationery_shop.repository.OrderRepository;
 import org.example.stationery_shop.repository.OrderStatusHistoryRepository;
 import org.example.stationery_shop.repository.PaymentRepository;
 import org.example.stationery_shop.repository.PaymentWebhookLogRepository;
+import org.example.stationery_shop.repository.CarrierAssignmentRepository;
+import org.example.stationery_shop.repository.CarrierRepository;
 import org.example.stationery_shop.repository.ShipmentRepository;
 import org.example.stationery_shop.service.PaymentCallbackService;
 import org.example.stationery_shop.service.VoucherService;
+import org.example.stationery_shop.service.auth.MailService;
 import org.example.stationery_shop.service.payment.VnPayService;
 import org.example.stationery_shop.service.shipping.GhnClient;
 import org.example.stationery_shop.service.shipping.GhnCreateOrderResult;
@@ -65,6 +71,9 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
     private final GhnProperties ghnProperties;
     private final VoucherService voucherService;
     private final PlatformTransactionManager transactionManager;
+    private final CarrierRepository carrierRepository;
+    private final CarrierAssignmentRepository carrierAssignmentRepository;
+    private final MailService mailService;
 
     @Override
     public String handleVnPayCallback(Map<String, String> params) {
@@ -77,7 +86,7 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
         Order order = transactionTemplate.execute(status -> finalizePayment(params, webhookKey));
         if (order != null && order.getDeliveryMethod() == DeliveryMethod.SHIP_TO_HOME
                 && order.getStatus() == OrderStatus.PROCESSING) {
-            createGhnOrder(order.getId());
+            createShippingOrder(order.getId());
         }
         return "OK";
     }
@@ -116,10 +125,13 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
             updateOrderStatus(order, order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
                     ? OrderStatus.READY_FOR_PICKUP
                     : OrderStatus.PROCESSING, "VNPAY payment success");
-            getOrCreateShipment(order, order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
+            Shipment shipment = getOrCreateShipment(order, order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
                     ? ShippingStatus.NOT_REQUIRED
                     : ShippingStatus.PENDING);
             voucherService.recordUsage(order.getVoucherCode(), order.getId());
+            if (order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE) {
+                sendOrderNotification(order, shipment);
+            }
         } else {
             payment.setStatus(PaymentStatus.FAILED);
             payment.setProviderTransactionId(params.get("vnp_TransactionNo"));
@@ -129,6 +141,17 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
         }
         saveWebhookLog(webhookKey, params, true);
         return order;
+    }
+
+    private void createShippingOrder(String orderId) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        Order order = orderRepository.findWithItemsById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_EXIST));
+        if (order.getShippingFeeSnapshot().getProvider() == ShippingProvider.INTERNAL) {
+            transactionTemplate.executeWithoutResult(status -> saveInternalShippingSuccess(orderId));
+            return;
+        }
+        createGhnOrder(orderId);
     }
 
     private void createGhnOrder(String orderId) {
@@ -169,6 +192,49 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
         shipment.setShippingFee(result.getTotalFee());
         shipmentRepository.save(shipment);
         updateOrderStatus(order, OrderStatus.SHIPPING, "GHN order created");
+        sendOrderNotification(order, shipment);
+    }
+
+    private void saveInternalShippingSuccess(String orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_EXIST));
+        Shipment shipment = getOrCreateShipment(order, ShippingStatus.PENDING);
+        shipment.setProvider(ShippingProvider.INTERNAL);
+        shipment.setStatus(ShippingStatus.READY_FOR_PICKUP);
+        shipment.setShippingFee(BigDecimal.ZERO);
+        shipmentRepository.save(shipment);
+        assignCarrierIfPossible(shipment);
+        updateOrderStatus(order,
+                shipment.getStatus() == ShippingStatus.NEED_MANUAL_PROCESSING
+                        ? OrderStatus.NEED_MANUAL_PROCESSING
+                        : OrderStatus.PROCESSING,
+                shipment.getStatus() == ShippingStatus.NEED_MANUAL_PROCESSING
+                        ? "Internal delivery needs manual processing"
+                        : "Internal delivery ready for carrier pickup");
+        sendOrderNotification(order, shipment);
+    }
+
+    private void assignCarrierIfPossible(Shipment shipment) {
+        if (carrierAssignmentRepository.existsByShipmentId(shipment.getId())) {
+            return;
+        }
+        Integer provinceId = shipment.getOrder().getAddress() == null ? null : shipment.getOrder().getAddress().getProvinceId();
+        List<Carrier> carriers = carrierRepository.findAssignableCarriers(provinceId);
+        if (carriers.isEmpty()) {
+            shipment.setStatus(ShippingStatus.NEED_MANUAL_PROCESSING);
+            shipment.setNote("No internal carrier available");
+            shipmentRepository.save(shipment);
+            return;
+        }
+        Carrier carrier = carriers.get(0);
+        carrier.setCurrentAssignedOrders(carrier.getCurrentAssignedOrders() + 1);
+        carrierRepository.save(carrier);
+        carrierAssignmentRepository.save(CarrierAssignment.builder()
+                .shipment(shipment)
+                .carrier(carrier)
+                .status(CarrierAssignmentStatus.ASSIGNED)
+                .assignedAt(Instant.now())
+                .build());
     }
 
     private void markShippingManual(String orderId, String note) {
@@ -280,10 +346,46 @@ public class PaymentCallbackServiceImpl implements PaymentCallbackService {
         }
         return shipmentRepository.save(Shipment.builder()
                 .order(order)
-                .provider(ShippingProvider.GHN)
+                .provider(order.getShippingFeeSnapshot() == null ? ShippingProvider.GHN : order.getShippingFeeSnapshot().getProvider())
                 .status(initialStatus)
                 .shippingFee(order.getShippingFee())
                 .build());
+    }
+
+    private void sendOrderNotification(Order order, Shipment shipment) {
+        if (order.getUser() == null || order.getUser().getEmail() == null) {
+            return;
+        }
+        String storeInfo = order.getStore() == null ? "" : """
+
+                Cua hang phu trach:
+                %s
+                Dia chi: %s
+                So dien thoai: %s
+                """.formatted(order.getStore().getName(), formatStoreAddress(order), order.getStore().getPhone());
+        String deliveryInfo = order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
+                ? "Vui long khong xoa email nay va mang thong tin don hang den cua hang de nhan san pham."
+                : "Don hang se duoc giao den dia chi: " + order.getShippingAddress();
+        mailService.sendSimpleMail(
+                order.getUser().getEmail(),
+                "Thong tin don hang " + order.getId(),
+                """
+                Don hang %s da duoc thanh toan/ghi nhan.
+
+                Tong tien: %s
+                Trang thai giao hang: %s
+                %s
+                %s
+
+                Vui long khong xoa email nay de doi chieu khi can.
+                """.formatted(order.getId(), order.getTotalAmount(),
+                        shipment == null ? "" : shipment.getStatus(), deliveryInfo, storeInfo)
+        );
+    }
+
+    private String formatStoreAddress(Order order) {
+        return order.getStore().getDetailAddress() + ", " + order.getStore().getWardName() + ", "
+                + order.getStore().getDistrictName() + ", " + order.getStore().getProvinceName();
     }
 
     private void saveWebhookLog(String key, Map<String, String> params, boolean processed) {

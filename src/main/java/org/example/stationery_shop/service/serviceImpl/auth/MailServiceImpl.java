@@ -44,6 +44,15 @@ public class MailServiceImpl implements MailService {
     }
 
     @Override
+    public void sendSimpleMail(String to, String subject, String content) {
+        SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setTo(to);
+        msg.setSubject(subject);
+        msg.setText(content);
+        mailSender.send(msg);
+    }
+
+    @Override
     @Transactional
     public void verifyMail(String token) {
         EmailVerifyToken evt = mailRepository.findByToken(token)

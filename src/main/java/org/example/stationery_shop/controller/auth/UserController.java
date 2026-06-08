@@ -3,6 +3,8 @@ package org.example.stationery_shop.controller.auth;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.stationery_shop.dto.request.PhoneOtpSendRequest;
+import org.example.stationery_shop.dto.request.PhoneOtpVerifyRequest;
 import org.example.stationery_shop.dto.request.RegisterRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.UserResponse;
@@ -12,6 +14,7 @@ import org.example.stationery_shop.exception.ErrorCode;
 import org.example.stationery_shop.mapper.UserMapper;
 
 import org.example.stationery_shop.repository.UserRepository;
+import org.example.stationery_shop.service.PhoneVerificationService;
 import org.example.stationery_shop.service.serviceImpl.auth.UserServiceImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +27,7 @@ public class UserController {
     private final UserServiceImpl userService;
     private final UserMapper userMapper;
     private final UserRepository userRepository;
+    private final PhoneVerificationService phoneVerificationService;
 
     @PostMapping("/register")
     public ApiResponse<UserResponse> register(
@@ -77,6 +81,24 @@ public class UserController {
                 .code(200)
                 .message("Current user")
                 .result(userMapper.toResponse(user))
+                .build();
+    }
+
+    @PostMapping("/phone-otp/send")
+    public ApiResponse<Void> sendPhoneOtp(@Valid @RequestBody PhoneOtpSendRequest request) {
+        phoneVerificationService.sendOtp(request);
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("OTP da duoc gui ve email cua ban")
+                .build();
+    }
+
+    @PostMapping("/phone-otp/verify")
+    public ApiResponse<Void> verifyPhoneOtp(@Valid @RequestBody PhoneOtpVerifyRequest request) {
+        phoneVerificationService.verifyOtp(request);
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("Xac thuc so dien thoai thanh cong")
                 .build();
     }
 }

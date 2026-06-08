@@ -44,7 +44,7 @@ import java.util.regex.Pattern;
 public class ProductVariantImageImportServiceImpl implements ProductVariantImageImportService {
     private static final String JOB_KEY_PREFIX = "catalog:variant-image-import:job:";
     private static final String QUEUE_KEY = "catalog:variant-image-import:queue";
-    private static final String CLOUDINARY_ROOT_FOLDER = "stationery-shop/product-variants";
+    private static final String CLOUDINARY_ROOT_FOLDER = "Jewelry_shop/product-variants";
     private static final Duration JOB_TTL = Duration.ofHours(24);
     private static final Pattern IMAGE_FILE_PATTERN = Pattern.compile(
             "image_(\\d+)\\.(jpg|jpeg|png|webp)$",

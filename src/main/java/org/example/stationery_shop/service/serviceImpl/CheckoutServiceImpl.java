@@ -24,7 +24,10 @@ import org.example.stationery_shop.entity.order.Order;
 import org.example.stationery_shop.entity.order.OrderItem;
 import org.example.stationery_shop.entity.order.OrderStatusHistory;
 import org.example.stationery_shop.entity.payment.Payment;
+import org.example.stationery_shop.entity.shipping.Carrier;
+import org.example.stationery_shop.entity.shipping.CarrierAssignment;
 import org.example.stationery_shop.entity.shipping.Shipment;
+import org.example.stationery_shop.enums.CarrierAssignmentStatus;
 import org.example.stationery_shop.enums.DeliveryMethod;
 import org.example.stationery_shop.enums.InventoryTransactionType;
 import org.example.stationery_shop.enums.OrderStatus;
@@ -36,6 +39,8 @@ import org.example.stationery_shop.enums.ShippingStatus;
 import org.example.stationery_shop.exception.AppException;
 import org.example.stationery_shop.exception.ErrorCode;
 import org.example.stationery_shop.repository.AddressRepository;
+import org.example.stationery_shop.repository.CarrierAssignmentRepository;
+import org.example.stationery_shop.repository.CarrierRepository;
 import org.example.stationery_shop.repository.CartItemRepository;
 import org.example.stationery_shop.repository.InventoryRepository;
 import org.example.stationery_shop.repository.InventoryReservationRepository;
@@ -50,6 +55,7 @@ import org.example.stationery_shop.repository.StoreRepository;
 import org.example.stationery_shop.service.CheckoutService;
 import org.example.stationery_shop.service.CurrentUserService;
 import org.example.stationery_shop.service.VoucherService;
+import org.example.stationery_shop.service.auth.MailService;
 import org.example.stationery_shop.service.payment.VnPayService;
 import org.example.stationery_shop.service.shipping.GhnClient;
 import org.example.stationery_shop.service.shipping.GhnCreateOrderResult;
@@ -91,6 +97,9 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final ShipmentRepository shipmentRepository;
     private final CartItemRepository cartItemRepository;
     private final VoucherService voucherService;
+    private final CarrierRepository carrierRepository;
+    private final CarrierAssignmentRepository carrierAssignmentRepository;
+    private final MailService mailService;
 
 
     @Override
@@ -107,19 +116,29 @@ public class CheckoutServiceImpl implements CheckoutService {
         BigDecimal insuranceValue = calculateInsuranceValue(request.getItems());
         Integer serviceId = request.getServiceId();
         Integer serviceTypeId = request.getServiceTypeId();
+        ShippingProvider provider = ShippingProvider.GHN;
         if (request.getDeliveryMethod() == DeliveryMethod.SHIP_TO_HOME) {
-            Store store = resolveStoreFromItems(request.getItems());
             if (request.getAddressId() == null || request.getAddressId().isBlank()) {
                 throw new AppException(ErrorCode.ADDRESS_REQUIRED);
             }
             address = addressRepository.findByIdAndUserId(request.getAddressId(), user.getId())
                     .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_EXIST));
-            GhnFeeResult feeResult = ghnClient.calculateFee(store, address, weight, length, width, height,
-                    serviceId, serviceTypeId, insuranceValue);
-            shippingFee = feeResult.getFee();
-            serviceId = feeResult.getServiceId();
-            serviceTypeId = feeResult.getServiceTypeId();
+            Store store = resolveStoreForHomeDelivery(request.getItems(), address);
+            if (isSameProvince(store, address)) {
+                provider = ShippingProvider.INTERNAL;
+                shippingFee = BigDecimal.ZERO;
+                serviceId = null;
+                serviceTypeId = null;
+            } else {
+                GhnFeeResult feeResult = ghnClient.calculateFee(store, address, weight, length, width, height,
+                        serviceId, serviceTypeId, insuranceValue);
+                shippingFee = feeResult.getFee();
+                serviceId = feeResult.getServiceId();
+                serviceTypeId = feeResult.getServiceTypeId();
+            }
         } else {
+            validatePickupStoreSelection(request.getItems());
+            provider = ShippingProvider.INTERNAL;
             insuranceValue = BigDecimal.ZERO;
         }
 
@@ -127,7 +146,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .user(user)
                 .deliveryMethod(request.getDeliveryMethod())
                 .address(address)
-                .provider(ShippingProvider.GHN)
+                .provider(provider)
                 .shippingFee(shippingFee)
                 .insuranceValue(insuranceValue)
                 .serviceId(serviceId)
@@ -178,9 +197,11 @@ public class CheckoutServiceImpl implements CheckoutService {
     @Transactional
     public CheckoutResponse checkout(CheckoutRequest request, String clientIp) {
         User user = currentUserService.getCurrentUser();
+        ensurePhoneVerifiedForCustomer(user);
         Address address = validateAddress(user, request);
         ShippingFeeSnapshot snapshot = validateShippingSnapshot(user, request, address);
-        Store checkoutStore = resolveStoreFromItems(request.getItems());
+        Store checkoutStore = resolveCheckoutStore(request.getDeliveryMethod(), request.getItems(), address);
+        applyStoreToItems(request.getItems(), checkoutStore);
 
         Order order = Order.builder()
                 .user(user)
@@ -256,7 +277,9 @@ public class CheckoutServiceImpl implements CheckoutService {
                     ? ShippingStatus.NOT_REQUIRED
                     : ShippingStatus.PENDING);
             if (request.getDeliveryMethod() == DeliveryMethod.SHIP_TO_HOME) {
-                createGhnOrderForCod(savedOrder, shipment);
+                createShipmentForCod(savedOrder, shipment);
+            } else {
+                sendOrderNotification(savedOrder, shipment);
             }
         }
         return CheckoutResponse.builder()
@@ -274,7 +297,9 @@ public class CheckoutServiceImpl implements CheckoutService {
     @Transactional
     public CheckoutResponse checkoutFromCart(CartCheckoutRequest request, String clientIp) {
         List<CartItem> selectedItems = loadSelectedCartItems(request.getCartItemIds());
-        List<UnavailableCartItemResponse> unavailableItems = findUnavailableCartItems(selectedItems);
+        List<UnavailableCartItemResponse> unavailableItems = request.getDeliveryMethod() == DeliveryMethod.SHIP_TO_HOME
+                ? List.of()
+                : findUnavailableCartItems(selectedItems);
         if (!unavailableItems.isEmpty()) {
             if (!request.isRemoveUnavailableItems()) {
                 return CheckoutResponse.builder()
@@ -309,6 +334,14 @@ public class CheckoutServiceImpl implements CheckoutService {
         return response;
     }
 
+    private void createShipmentForCod(Order order, Shipment shipment) {
+        if (order.getShippingFeeSnapshot().getProvider() == ShippingProvider.INTERNAL) {
+            createInternalShipment(order, shipment);
+            return;
+        }
+        createGhnOrderForCod(order, shipment);
+    }
+
     private void createGhnOrderForCod(Order order, Shipment shipment) {
         if (StringUtils.hasText(shipment.getGhnOrderCode())) {
             return;
@@ -325,9 +358,49 @@ public class CheckoutServiceImpl implements CheckoutService {
             shipment.setShippingFee(result.getTotalFee());
             shipmentRepository.save(shipment);
             updateOrderStatus(order, OrderStatus.SHIPPING, "GHN order created for COD");
+            sendOrderNotification(order, shipment);
         } catch (Exception exception) {
             markShippingManual(order, shipment, exception.getMessage());
         }
+    }
+
+    private void createInternalShipment(Order order, Shipment shipment) {
+        shipment.setProvider(ShippingProvider.INTERNAL);
+        shipment.setStatus(ShippingStatus.READY_FOR_PICKUP);
+        shipment.setShippingFee(BigDecimal.ZERO);
+        shipmentRepository.save(shipment);
+        assignCarrierIfPossible(shipment);
+        updateOrderStatus(order,
+                shipment.getStatus() == ShippingStatus.NEED_MANUAL_PROCESSING
+                        ? OrderStatus.NEED_MANUAL_PROCESSING
+                        : OrderStatus.PROCESSING,
+                shipment.getStatus() == ShippingStatus.NEED_MANUAL_PROCESSING
+                        ? "Internal delivery needs manual processing"
+                        : "Internal delivery ready for carrier pickup");
+        sendOrderNotification(order, shipment);
+    }
+
+    private void assignCarrierIfPossible(Shipment shipment) {
+        if (carrierAssignmentRepository.existsByShipmentId(shipment.getId())) {
+            return;
+        }
+        Integer provinceId = shipment.getOrder().getAddress() == null ? null : shipment.getOrder().getAddress().getProvinceId();
+        List<Carrier> carriers = carrierRepository.findAssignableCarriers(provinceId);
+        if (carriers.isEmpty()) {
+            shipment.setStatus(ShippingStatus.NEED_MANUAL_PROCESSING);
+            shipment.setNote("No internal carrier available");
+            shipmentRepository.save(shipment);
+            return;
+        }
+        Carrier carrier = carriers.get(0);
+        carrier.setCurrentAssignedOrders(carrier.getCurrentAssignedOrders() + 1);
+        carrierRepository.save(carrier);
+        carrierAssignmentRepository.save(CarrierAssignment.builder()
+                .shipment(shipment)
+                .carrier(carrier)
+                .status(CarrierAssignmentStatus.ASSIGNED)
+                .assignedAt(Instant.now())
+                .build());
     }
 
     private void markShippingManual(Order order, Shipment shipment, String note) {
@@ -347,7 +420,9 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
         return shipmentRepository.save(Shipment.builder()
                 .order(order)
-                .provider(ShippingProvider.GHN)
+                .provider(order.getShippingFeeSnapshot() == null
+                        ? ShippingProvider.GHN
+                        : order.getShippingFeeSnapshot().getProvider())
                 .status(initialStatus)
                 .shippingFee(order.getShippingFee())
                 .build());
@@ -401,7 +476,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             return shippingFeeSnapshotRepository.save(ShippingFeeSnapshot.builder()
                     .user(user)
                     .deliveryMethod(DeliveryMethod.PICKUP_AT_STORE)
-                    .provider(ShippingProvider.GHN)
+                    .provider(ShippingProvider.INTERNAL)
                     .shippingFee(BigDecimal.ZERO)
                     .insuranceValue(BigDecimal.ZERO)
                     .weight(DEFAULT_WEIGHT)
@@ -431,6 +506,83 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new AppException(ErrorCode.SHIPPING_FEE_SNAPSHOT_MISMATCH);
         }
         return snapshot;
+    }
+
+    private Store resolveCheckoutStore(DeliveryMethod deliveryMethod, List<CheckoutItemRequest> items, Address address) {
+        if (deliveryMethod == DeliveryMethod.PICKUP_AT_STORE) {
+            validatePickupStoreSelection(items);
+            return resolveStoreFromItems(items);
+        }
+        return resolveStoreForHomeDelivery(items, address);
+    }
+
+    private Store resolveStoreForHomeDelivery(List<CheckoutItemRequest> items, Address address) {
+        if (items == null || items.isEmpty()) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Checkout items are required");
+        }
+        return inventoryRepository.findPickupCandidates(items.get(0).getProductVariantId(), items.get(0).getQuantity())
+                .stream()
+                .map(Inventory::getStore)
+                .filter(store -> hasEnoughInventoryForAllItems(store, items))
+                .sorted((left, right) -> Integer.compare(storeDistanceScore(left, address), storeDistanceScore(right, address)))
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_ENOUGH_STOCK));
+    }
+
+    private boolean hasEnoughInventoryForAllItems(Store store, List<CheckoutItemRequest> items) {
+        for (CheckoutItemRequest item : items) {
+            int available = inventoryRepository.findByProductVariantIdAndStoreId(item.getProductVariantId(), store.getId())
+                    .map(Inventory::getQuantityAvailable)
+                    .orElse(0);
+            if (available < item.getQuantity()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private int storeDistanceScore(Store store, Address address) {
+        if (store == null || address == null) {
+            return 100;
+        }
+        if (store.getWardCode() != null && store.getWardCode().equals(address.getWardCode())) {
+            return 0;
+        }
+        if (store.getDistrictId() != null && store.getDistrictId().equals(address.getDistrictId())) {
+            return 1;
+        }
+        if (store.getProvinceId() != null && store.getProvinceId().equals(address.getProvinceId())) {
+            return 2;
+        }
+        return 3;
+    }
+
+    private boolean isSameProvince(Store store, Address address) {
+        return store != null
+                && address != null
+                && store.getProvinceId() != null
+                && store.getProvinceId().equals(address.getProvinceId());
+    }
+
+    private void applyStoreToItems(List<CheckoutItemRequest> items, Store store) {
+        for (CheckoutItemRequest item : items) {
+            item.setStoreId(store.getId());
+        }
+    }
+
+    private void validatePickupStoreSelection(List<CheckoutItemRequest> items) {
+        if (items == null || items.isEmpty()) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Checkout items are required");
+        }
+        String storeId = items.get(0).getStoreId();
+        if (storeId == null || storeId.isBlank()) {
+            throw new AppException(ErrorCode.STORE_NOT_EXIST);
+        }
+        for (CheckoutItemRequest item : items) {
+            if (!storeId.equals(item.getStoreId())) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR, "Checkout currently supports one store per order");
+            }
+        }
     }
 
     private ShippingFeeResponse toShippingFeeResponse(ShippingFeeSnapshot snapshot) {
@@ -515,6 +667,57 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
         return storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_EXIST));
+    }
+
+    private void ensurePhoneVerifiedForCustomer(User user) {
+        boolean privileged = user.getRoles().stream()
+                .anyMatch(role -> "ROLE_ADMIN".equals(role.getCode()) || "ROLE_STAFF".equals(role.getCode()));
+        if (!privileged && !user.isPhoneVerified()) {
+            throw new AppException(ErrorCode.PHONE_NOT_VERIFIED);
+        }
+    }
+
+    private void sendOrderNotification(Order order, Shipment shipment) {
+        if (order.getUser() == null || order.getUser().getEmail() == null) {
+            return;
+        }
+        String subject = "Thong tin don hang " + order.getId();
+        String storeInfo = order.getStore() == null ? "" : """
+
+                Cua hang phu trach:
+                %s
+                Dia chi: %s
+                So dien thoai: %s
+                """.formatted(order.getStore().getName(), formatStoreAddress(order.getStore()), order.getStore().getPhone());
+        String deliveryInfo = order.getDeliveryMethod() == DeliveryMethod.PICKUP_AT_STORE
+                ? "Vui long khong xoa email nay va mang thong tin don hang den cua hang de nhan san pham."
+                : "Don hang se duoc giao den dia chi: " + order.getShippingAddress();
+        mailService.sendSimpleMail(
+                order.getUser().getEmail(),
+                subject,
+                """
+                Don hang %s da duoc ghi nhan.
+
+                Tong tien: %s
+                Trang thai giao hang: %s
+                %s
+                %s
+
+                %s
+                """.formatted(
+                        order.getId(),
+                        order.getTotalAmount(),
+                        shipment == null ? "" : shipment.getStatus(),
+                        deliveryInfo,
+                        storeInfo,
+                        "Vui long khong xoa email nay de doi chieu khi can."
+                )
+        );
+    }
+
+    private String formatStoreAddress(Store store) {
+        return store.getDetailAddress() + ", " + store.getWardName() + ", "
+                + store.getDistrictName() + ", " + store.getProvinceName();
     }
 
     private List<CartItem> loadSelectedCartItems(List<String> cartItemIds) {

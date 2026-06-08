@@ -4,9 +4,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.stationery_shop.entity.auth.Role;
 import org.example.stationery_shop.entity.auth.User;
+import org.example.stationery_shop.entity.shipping.Carrier;
 import org.example.stationery_shop.enums.UserStatus;
 import org.example.stationery_shop.exception.AppException;
 import org.example.stationery_shop.exception.ErrorCode;
+import org.example.stationery_shop.repository.CarrierRepository;
 import org.example.stationery_shop.repository.RoleRepository;
 import org.example.stationery_shop.repository.UserRepository;
 
@@ -24,7 +26,7 @@ public class ApplicationInitConfig {
     private final PasswordEncoder passwordEncoder;
 
     @Bean
-    ApplicationRunner runner(UserRepository userAccountRepository, RoleRepository roleRepository) {
+    ApplicationRunner runner(UserRepository userAccountRepository, RoleRepository roleRepository, CarrierRepository carrierRepository) {
         return args -> {
             log.info("===== START INITIALIZING DATABASE =====");
 
@@ -32,6 +34,7 @@ public class ApplicationInitConfig {
             Role roleUser = null;
             Role roleAdmin = null;
             Role roleStaff = null;
+            Role roleCarrier = null;
 
             if (!roleRepository.existsByCode("ROLE_USER")) {
                 roleUser = new Role();
@@ -65,6 +68,17 @@ public class ApplicationInitConfig {
                 log.info("Created ROLE_STAFF");
             } else {
                 roleStaff = roleRepository.findByCode("ROLE_STAFF")
+                        .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXIST));
+            }
+            if (!roleRepository.existsByCode("ROLE_CARRIER")) {
+                roleCarrier = new Role();
+                roleCarrier.setCode("ROLE_CARRIER");
+                roleCarrier.setName("Carrier");
+                roleCarrier.setDescription("Internal delivery carrier");
+                roleRepository.save(roleCarrier);
+                log.info("Created ROLE_CARRIER");
+            } else {
+                roleCarrier = roleRepository.findByCode("ROLE_CARRIER")
                         .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXIST));
             }
 
@@ -109,6 +123,55 @@ public class ApplicationInitConfig {
                 log.info("Created staff user with email: staff@shop.com, password: staff");
             } else {
                 log.info("Staff user already exists");
+            }
+
+            User carrierUser;
+            if (!userAccountRepository.existsByEmail("carrier@shop.com")) {
+                carrierUser = new User();
+                carrierUser.setEmail("carrier@shop.com");
+                carrierUser.setPassword(passwordEncoder.encode("carrier"));
+                carrierUser.setName("Carrier");
+                carrierUser.setPhone("0900000202");
+                carrierUser.setStatus(UserStatus.ACTIVE);
+                carrierUser.setPhoneVerified(true);
+
+                HashSet<Role> roles = new HashSet<>();
+                roles.add(roleUser);
+                roles.add(roleCarrier);
+                carrierUser.setRoles(roles);
+
+                userAccountRepository.save(carrierUser);
+                log.info("Created carrier user with email: carrier@shop.com, password: carrier");
+            } else {
+                carrierUser = userAccountRepository.findByEmail("carrier@shop.com")
+                        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXIST));
+            }
+
+            // 4. INIT DEMO INTERNAL CARRIER
+            if (!carrierRepository.existsByPhoneAndProvinceId("0900000202", 202)) {
+                Carrier carrier = Carrier.builder()
+                        .user(carrierUser)
+                        .name("Da Nang Internal Carrier")
+                        .phone("0900000202")
+                        .provinceId(202)
+                        .provinceName("Da Nang")
+                        .districtId(1524)
+                        .districtName("Hai Chau")
+                        .currentAssignedOrders(0)
+                        .maxActiveOrders(20)
+                        .active(true)
+                        .build();
+                carrierRepository.save(carrier);
+                log.info("Created demo internal carrier for Da Nang");
+            } else {
+                carrierRepository.findByPhoneAndProvinceId("0900000202", 202)
+                        .filter(carrier -> carrier.getUser() == null)
+                        .ifPresent(carrier -> {
+                            carrier.setUser(carrierUser);
+                            carrierRepository.save(carrier);
+                            log.info("Linked demo internal carrier to carrier@shop.com");
+                        });
+                log.info("Demo internal carrier already exists");
             }
 
             log.info("===== DATABASE INITIALIZATION COMPLETED =====");
