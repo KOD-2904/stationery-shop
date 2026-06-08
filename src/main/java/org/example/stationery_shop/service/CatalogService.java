@@ -8,6 +8,7 @@ import org.example.stationery_shop.dto.response.BrandResponse;
 import org.example.stationery_shop.dto.response.CatalogImportResponse;
 import org.example.stationery_shop.dto.response.CategoryResponse;
 import org.example.stationery_shop.dto.response.ProductImageResponse;
+import org.example.stationery_shop.dto.response.ProductImageImportResponse;
 import org.example.stationery_shop.dto.response.ProductResponse;
 import org.example.stationery_shop.dto.response.ProductVariantImageResponse;
 import org.example.stationery_shop.dto.response.ProductVariantResponse;
@@ -43,4 +44,5 @@ public interface CatalogService {
     ProductVariantImageResponse uploadVariantImage(String id, MultipartFile file, boolean primaryImage, Integer sortOrder);
 
     CatalogImportResponse importCatalog(MultipartFile file);
+    ProductImageImportResponse importProductImages(MultipartFile file);
 }

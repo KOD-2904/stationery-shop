@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface ProductImageRepository extends JpaRepository<ProductImage, String> {
     List<ProductImage> findByProductIdOrderBySortOrderAscCreatedAtAsc(String productId);
+    boolean existsByProductIdAndImageUrl(String productId, String imageUrl);
 }

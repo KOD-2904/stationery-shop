@@ -14,6 +14,7 @@ import org.example.stationery_shop.dto.request.ProductVariantRequest;
 import org.example.stationery_shop.dto.response.BrandResponse;
 import org.example.stationery_shop.dto.response.CatalogImportResponse;
 import org.example.stationery_shop.dto.response.CategoryResponse;
+import org.example.stationery_shop.dto.response.ProductImageImportResponse;
 import org.example.stationery_shop.dto.response.ProductImageResponse;
 import org.example.stationery_shop.dto.response.ProductResponse;
 import org.example.stationery_shop.dto.response.ProductVariantImageResponse;
@@ -44,7 +45,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.List;
 import java.util.Optional;
@@ -421,6 +425,134 @@ public class CatalogServiceImpl implements CatalogService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public ProductImageImportResponse importProductImages(MultipartFile file) {
+        ProductImageImportStats stats = new ProductImageImportStats();
+        List<ProductImageImportResponse.ProductImageImportRowResult> rowResults = new ArrayList<>();
+
+        try (InputStream inputStream = openProductImageImportStream(file);
+             Workbook workbook = new XSSFWorkbook(inputStream)) {
+            Sheet sheet = workbook.getNumberOfSheets() == 0 ? null : workbook.getSheetAt(0);
+            if (sheet == null || sheet.getPhysicalNumberOfRows() <= 1) {
+                throw new AppException(ErrorCode.CATALOG_IMPORT_FILE_INVALID);
+            }
+
+            DataFormatter formatter = new DataFormatter(Locale.US);
+            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (isBlankProductImageRow(row, formatter)) {
+                    continue;
+                }
+
+                stats.totalRows++;
+                ProductImageImportResponse.ProductImageImportRowResult rowResult =
+                        importProductImageRow(row, formatter, rowIndex + 1, stats);
+                rowResults.add(rowResult);
+                if (rowResult.isSuccess()) {
+                    stats.successRows++;
+                } else {
+                    stats.failedRows++;
+                }
+            }
+        } catch (IOException | IllegalArgumentException e) {
+            throw new AppException(ErrorCode.CATALOG_IMPORT_FILE_INVALID);
+        }
+
+        return ProductImageImportResponse.builder()
+                .totalRows(stats.totalRows)
+                .successRows(stats.successRows)
+                .failedRows(stats.failedRows)
+                .createdImages(stats.createdImages)
+                .skippedImages(stats.skippedImages)
+                .rows(rowResults)
+                .build();
+    }
+
+    private InputStream openProductImageImportStream(MultipartFile file) throws IOException {
+        if (file != null && !file.isEmpty()) {
+            return file.getInputStream();
+        }
+        Path defaultFile = Path.of("product_image_urls.xlsx").toAbsolutePath().normalize();
+        if (!Files.isRegularFile(defaultFile)) {
+            throw new AppException(ErrorCode.CATALOG_IMPORT_FILE_INVALID);
+        }
+        return Files.newInputStream(defaultFile);
+    }
+
+    private ProductImageImportResponse.ProductImageImportRowResult importProductImageRow(
+            Row row,
+            DataFormatter formatter,
+            int rowNumber,
+            ProductImageImportStats stats
+    ) {
+        String productId = readCell(row, 0, formatter);
+        String urlsValue = readCell(row, 1, formatter);
+
+        try {
+            requireValue(productId, "Product id is required");
+            requireValue(urlsValue, "Image url is required");
+
+            Product product = productRepository.findById(productId)
+                    .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_EXIST));
+            List<String> imageUrls = splitImageUrls(urlsValue);
+            if (imageUrls.isEmpty()) {
+                throw new IllegalArgumentException("Image url is required");
+            }
+
+            int createdImages = 0;
+            int skippedImages = 0;
+            for (int index = 0; index < imageUrls.size(); index++) {
+                String imageUrl = imageUrls.get(index);
+                if (productImageRepository.existsByProductIdAndImageUrl(productId, imageUrl)) {
+                    skippedImages++;
+                    continue;
+                }
+
+                ProductImage image = ProductImage.builder()
+                        .product(product)
+                        .imageUrl(imageUrl)
+                        .primaryImage(index == 0)
+                        .sortOrder(index + 1)
+                        .build();
+                productImageRepository.save(image);
+                createdImages++;
+            }
+
+            if (product.getThumbnailUrl() == null && !imageUrls.isEmpty()) {
+                product.setThumbnailUrl(imageUrls.get(0));
+                productRepository.save(product);
+            }
+
+            stats.createdImages += createdImages;
+            stats.skippedImages += skippedImages;
+
+            return ProductImageImportResponse.ProductImageImportRowResult.builder()
+                    .rowNumber(rowNumber)
+                    .productId(productId)
+                    .createdImages(createdImages)
+                    .skippedImages(skippedImages)
+                    .success(true)
+                    .message(createdImages == 0 ? "Skipped existing images" : "Imported")
+                    .build();
+        } catch (IllegalArgumentException | AppException e) {
+            return ProductImageImportResponse.ProductImageImportRowResult.builder()
+                    .rowNumber(rowNumber)
+                    .productId(productId)
+                    .success(false)
+                    .message(rowErrorMessage(e))
+                    .build();
+        }
+    }
+
+    private List<String> splitImageUrls(String urlsValue) {
+        return Arrays.stream(urlsValue.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+    }
+
     private CatalogImportResponse.CatalogImportRowResult importCatalogRow(
             Row row,
             DataFormatter formatter,
@@ -686,6 +818,10 @@ public class CatalogServiceImpl implements CatalogService {
         return true;
     }
 
+    private boolean isBlankProductImageRow(Row row, DataFormatter formatter) {
+        return readCell(row, 0, formatter) == null && readCell(row, 1, formatter) == null;
+    }
+
     private String rowErrorMessage(Exception exception) {
         if (exception instanceof AppException appException) {
             return appException.getCustomMessage() == null
@@ -706,6 +842,14 @@ public class CatalogServiceImpl implements CatalogService {
         private int createdProducts;
         private int reusedProducts;
         private int createdVariants;
+    }
+
+    private static class ProductImageImportStats {
+        private int totalRows;
+        private int successRows;
+        private int failedRows;
+        private int createdImages;
+        private int skippedImages;
     }
 
     private Brand resolveBrand(String brandId) {

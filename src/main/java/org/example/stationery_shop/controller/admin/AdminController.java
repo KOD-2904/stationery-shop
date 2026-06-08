@@ -2,11 +2,13 @@ package org.example.stationery_shop.controller.admin;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.example.stationery_shop.dto.request.carrier.CarrierRequest;
 import org.example.stationery_shop.dto.request.admin.UpdateUserRoleRequest;
 import org.example.stationery_shop.dto.request.admin.UpdateUserStatusRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.UserResponse;
 import org.example.stationery_shop.dto.response.admin.AdminDashboardResponse;
+import org.example.stationery_shop.dto.response.carrier.CarrierResponse;
 import org.example.stationery_shop.enums.UserStatus;
 import org.example.stationery_shop.service.AdminService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -85,6 +88,42 @@ public class AdminController {
         return ApiResponse.<Void>builder()
                 .code(200)
                 .message("Logged out all users successfully")
+                .build();
+    }
+
+    @GetMapping("/carriers")
+    public ApiResponse<List<CarrierResponse>> getCarriers() {
+        return ApiResponse.<List<CarrierResponse>>builder()
+                .code(200)
+                .message("Success")
+                .result(adminService.getCarriers())
+                .build();
+    }
+
+    @PostMapping("/carriers")
+    public ApiResponse<CarrierResponse> createCarrier(@Valid @RequestBody CarrierRequest request) {
+        return ApiResponse.<CarrierResponse>builder()
+                .code(200)
+                .message("Created carrier successfully")
+                .result(adminService.createCarrier(request))
+                .build();
+    }
+
+    @PutMapping("/carriers/{id}")
+    public ApiResponse<CarrierResponse> updateCarrier(@PathVariable String id, @Valid @RequestBody CarrierRequest request) {
+        return ApiResponse.<CarrierResponse>builder()
+                .code(200)
+                .message("Updated carrier successfully")
+                .result(adminService.updateCarrier(id, request))
+                .build();
+    }
+
+    @PatchMapping("/carriers/{id}/active")
+    public ApiResponse<CarrierResponse> updateCarrierActive(@PathVariable String id, @RequestParam boolean active) {
+        return ApiResponse.<CarrierResponse>builder()
+                .code(200)
+                .message("Updated carrier status successfully")
+                .result(adminService.updateCarrierActive(id, active))
                 .build();
     }
 }
