@@ -301,8 +301,8 @@ public class OrderServiceImpl implements OrderService {
                 OrderStatus.SHIPPING,
                 OrderStatus.CANCELLED
         ));
-        transitions.put(OrderStatus.READY_FOR_PICKUP, EnumSet.of(OrderStatus.PICKED_UP, OrderStatus.CANCELLED));
-        transitions.put(OrderStatus.SHIPPING, EnumSet.of(OrderStatus.DELIVERED, OrderStatus.NEED_MANUAL_PROCESSING));
+        transitions.put(OrderStatus.READY_FOR_PICKUP, EnumSet.of(OrderStatus.SHIPPING, OrderStatus.PICKED_UP, OrderStatus.CANCELLED));
+        transitions.put(OrderStatus.SHIPPING, EnumSet.of(OrderStatus.COMPLETED, OrderStatus.DELIVERED, OrderStatus.NEED_MANUAL_PROCESSING));
         transitions.put(OrderStatus.DELIVERED, EnumSet.of(OrderStatus.COMPLETED, OrderStatus.RETURN_REQUESTED));
         transitions.put(OrderStatus.PICKED_UP, EnumSet.of(OrderStatus.COMPLETED, OrderStatus.RETURN_REQUESTED));
         transitions.put(OrderStatus.COMPLETED, EnumSet.of(OrderStatus.RETURN_REQUESTED));

@@ -7,6 +7,7 @@ public enum ShippingStatus {
     CREATED,
     SHIPPING,
     DELIVERED,
+    COMPLETED,
     FAILED,
     NEED_MANUAL_PROCESSING
 }

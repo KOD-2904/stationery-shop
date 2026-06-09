@@ -30,7 +30,7 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
     private final String[] PUBLIC_ENDPOINTS = {
-            "/api/auth/oauth2/**", "/api/auth/login", "/api/auth/token", "/api/auth/introspect", "/api/auth/log-out", "/api/auth/logout", "/api/auth/logout-all", "/api/auth/refreshToken", "/api/auth/register", "/api/auth/verify-email", "/api/auth/verify-user"
+            "/api/auth/oauth2/**", "/api/auth/login", "/api/auth/token", "/api/auth/introspect", "/api/auth/log-out", "/api/auth/logout", "/api/auth/logout-all", "/api/auth/refreshToken", "/api/auth/register", "/api/auth/verify-email", "/api/auth/verify-user", "/api/auth/forgot-password/send-otp", "/api/auth/forgot-password/reset"
     };
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final JwtAuthenticationEntryPoint authenticationFilter;
