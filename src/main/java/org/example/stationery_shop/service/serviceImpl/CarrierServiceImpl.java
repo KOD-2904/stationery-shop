@@ -117,11 +117,12 @@ public class CarrierServiceImpl implements CarrierService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public List<CarrierShipmentResponse> getMyShipments() {
         User user = currentUserService.getCurrentUser();
         return carrierAssignmentRepository.findByCarrierUserIdOrderByAssignedAtDesc(user.getId())
                 .stream()
+                .peek(this::normalizeCompletedAssignment)
                 .map(this::toShipmentResponse)
                 .toList();
     }
@@ -133,10 +134,13 @@ public class CarrierServiceImpl implements CarrierService {
         CarrierAssignment assignment = carrierAssignmentRepository.findByIdAndCarrierUserId(assignmentId, user.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.CARRIER_ASSIGNMENT_NOT_EXIST));
         Shipment shipment = assignment.getShipment();
+        ensureCarrierStep(
+                assignment.getStatus() == CarrierAssignmentStatus.ASSIGNED
+                        && shipment.getStatus() == ShippingStatus.READY_FOR_PICKUP
+                        && shipment.getOrder().getStatus() == OrderStatus.READY_FOR_PICKUP
+        );
         assignment.setStatus(CarrierAssignmentStatus.ACCEPTED);
         assignment.setAcceptedAt(Instant.now());
-        shipment.setStatus(ShippingStatus.SHIPPING);
-        updateOrderStatus(shipment.getOrder(), OrderStatus.SHIPPING, "Carrier picked up shipment");
         carrierAssignmentRepository.save(assignment);
         return toShipmentResponse(assignment);
     }
@@ -148,8 +152,13 @@ public class CarrierServiceImpl implements CarrierService {
         CarrierAssignment assignment = carrierAssignmentRepository.findByIdAndCarrierUserId(assignmentId, user.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.CARRIER_ASSIGNMENT_NOT_EXIST));
         Shipment shipment = assignment.getShipment();
-        shipment.setStatus(ShippingStatus.DELIVERED);
-        updateOrderStatus(shipment.getOrder(), OrderStatus.DELIVERED, "Carrier delivered shipment");
+        ensureCarrierStep(
+                assignment.getStatus() == CarrierAssignmentStatus.ACCEPTED
+                        && shipment.getStatus() == ShippingStatus.READY_FOR_PICKUP
+                        && shipment.getOrder().getStatus() == OrderStatus.READY_FOR_PICKUP
+        );
+        shipment.setStatus(ShippingStatus.SHIPPING);
+        updateOrderStatus(shipment.getOrder(), OrderStatus.SHIPPING, "Carrier started delivery");
         carrierAssignmentRepository.save(assignment);
         return toShipmentResponse(assignment);
     }
@@ -161,8 +170,14 @@ public class CarrierServiceImpl implements CarrierService {
         CarrierAssignment assignment = carrierAssignmentRepository.findByIdAndCarrierUserId(assignmentId, user.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.CARRIER_ASSIGNMENT_NOT_EXIST));
         Shipment shipment = assignment.getShipment();
+        ensureCarrierStep(
+                assignment.getStatus() == CarrierAssignmentStatus.ACCEPTED
+                        && shipment.getStatus() == ShippingStatus.SHIPPING
+                        && shipment.getOrder().getStatus() == OrderStatus.SHIPPING
+        );
         assignment.setStatus(CarrierAssignmentStatus.COMPLETED);
         assignment.setCompletedAt(Instant.now());
+        shipment.setStatus(ShippingStatus.COMPLETED);
         Carrier carrier = assignment.getCarrier();
         carrier.setCurrentAssignedOrders(Math.max(0, carrier.getCurrentAssignedOrders() - 1));
         carrierRepository.save(carrier);
@@ -218,6 +233,23 @@ public class CarrierServiceImpl implements CarrierService {
                 .newStatus(newStatus)
                 .note(note)
                 .build());
+    }
+
+    private void ensureCarrierStep(boolean valid) {
+        if (!valid) {
+            throw new AppException(ErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+    }
+
+    private void normalizeCompletedAssignment(CarrierAssignment assignment) {
+        if (assignment.getStatus() != CarrierAssignmentStatus.COMPLETED) {
+            return;
+        }
+        Shipment shipment = assignment.getShipment();
+        if (shipment.getStatus() != ShippingStatus.COMPLETED) {
+            shipment.setStatus(ShippingStatus.COMPLETED);
+        }
+        updateOrderStatus(shipment.getOrder(), OrderStatus.COMPLETED, "Normalize completed carrier shipment");
     }
 
     private CarrierShipmentResponse toShipmentResponse(CarrierAssignment assignment) {

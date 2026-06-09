@@ -6,6 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.stationery_shop.dto.request.PhoneOtpSendRequest;
 import org.example.stationery_shop.dto.request.PhoneOtpVerifyRequest;
 import org.example.stationery_shop.dto.request.RegisterRequest;
+import org.example.stationery_shop.dto.request.password.ChangePasswordRequest;
+import org.example.stationery_shop.dto.request.password.ForgotPasswordOtpRequest;
+import org.example.stationery_shop.dto.request.password.ResetPasswordRequest;
 import org.example.stationery_shop.dto.response.ApiResponse;
 import org.example.stationery_shop.dto.response.UserResponse;
 import org.example.stationery_shop.entity.auth.User;
@@ -14,6 +17,7 @@ import org.example.stationery_shop.exception.ErrorCode;
 import org.example.stationery_shop.mapper.UserMapper;
 
 import org.example.stationery_shop.repository.UserRepository;
+import org.example.stationery_shop.service.PasswordOtpService;
 import org.example.stationery_shop.service.PhoneVerificationService;
 import org.example.stationery_shop.service.serviceImpl.auth.UserServiceImpl;
 import org.springframework.security.core.Authentication;
@@ -28,6 +32,7 @@ public class UserController {
     private final UserMapper userMapper;
     private final UserRepository userRepository;
     private final PhoneVerificationService phoneVerificationService;
+    private final PasswordOtpService passwordOtpService;
 
     @PostMapping("/register")
     public ApiResponse<UserResponse> register(
@@ -99,6 +104,33 @@ public class UserController {
         return ApiResponse.<Void>builder()
                 .code(200)
                 .message("Xac thuc so dien thoai thanh cong")
+                .build();
+    }
+
+    @PostMapping("/forgot-password/send-otp")
+    public ApiResponse<Void> sendForgotPasswordOtp(@Valid @RequestBody ForgotPasswordOtpRequest request) {
+        passwordOtpService.sendForgotPasswordOtp(request);
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("OTP da duoc gui ve email cua ban")
+                .build();
+    }
+
+    @PostMapping("/forgot-password/reset")
+    public ApiResponse<Void> resetForgotPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordOtpService.resetForgotPassword(request);
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("Dat lai mat khau thanh cong")
+                .build();
+    }
+
+    @PostMapping("/password/change")
+    public ApiResponse<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        passwordOtpService.changePassword(request);
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("Doi mat khau thanh cong")
                 .build();
     }
 }

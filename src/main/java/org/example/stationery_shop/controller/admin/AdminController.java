@@ -27,7 +27,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/admin")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')")
 public class AdminController {
     private final AdminService adminService;
 
@@ -41,6 +41,7 @@ public class AdminController {
     }
 
     @GetMapping("/users")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<List<UserResponse>> getUsers(@RequestParam(required = false) UserStatus status) {
         return ApiResponse.<List<UserResponse>>builder()
                 .code(200)
@@ -50,6 +51,7 @@ public class AdminController {
     }
 
     @PatchMapping("/users/{id}/status")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<UserResponse> updateUserStatus(
             @PathVariable String id,
             @Valid @RequestBody UpdateUserStatusRequest request
@@ -62,6 +64,7 @@ public class AdminController {
     }
 
     @PatchMapping("/users/{id}/roles")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<UserResponse> updateUserRole(
             @PathVariable String id,
             @Valid @RequestBody UpdateUserRoleRequest request
@@ -74,6 +77,7 @@ public class AdminController {
     }
 
     @PostMapping("/users/{id}/logout-all")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<Void> logoutAllUserDevices(@PathVariable String id) {
         adminService.logoutAllUserDevices(id);
         return ApiResponse.<Void>builder()
@@ -83,6 +87,7 @@ public class AdminController {
     }
 
     @PostMapping("/users/logout-all")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<Void> logoutAllUsers() {
         adminService.logoutAllUsers();
         return ApiResponse.<Void>builder()
@@ -92,6 +97,7 @@ public class AdminController {
     }
 
     @GetMapping("/carriers")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<List<CarrierResponse>> getCarriers() {
         return ApiResponse.<List<CarrierResponse>>builder()
                 .code(200)
@@ -101,6 +107,7 @@ public class AdminController {
     }
 
     @PostMapping("/carriers")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<CarrierResponse> createCarrier(@Valid @RequestBody CarrierRequest request) {
         return ApiResponse.<CarrierResponse>builder()
                 .code(200)
@@ -110,6 +117,7 @@ public class AdminController {
     }
 
     @PutMapping("/carriers/{id}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<CarrierResponse> updateCarrier(@PathVariable String id, @Valid @RequestBody CarrierRequest request) {
         return ApiResponse.<CarrierResponse>builder()
                 .code(200)
@@ -119,6 +127,7 @@ public class AdminController {
     }
 
     @PatchMapping("/carriers/{id}/active")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<CarrierResponse> updateCarrierActive(@PathVariable String id, @RequestParam boolean active) {
         return ApiResponse.<CarrierResponse>builder()
                 .code(200)

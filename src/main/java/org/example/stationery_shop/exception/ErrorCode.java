@@ -26,6 +26,7 @@ public enum ErrorCode {
     PHONE_NOT_VERIFIED(10017, "Can xac thuc so dien thoai truoc khi dat hang" , HttpStatus.BAD_REQUEST),
     OTP_INVALID(10018, "OTP khong hop le" , HttpStatus.BAD_REQUEST),
     OTP_RATE_LIMITED(10019, "Gui OTP qua nhanh, vui long thu lai sau" , HttpStatus.TOO_MANY_REQUESTS),
+    PASSWORD_CONFIRM_MISMATCH(10020, "Mat khau xac nhan khong khop" , HttpStatus.BAD_REQUEST),
     CATEGORY_NOT_EXIST(20000, "Category khong ton tai" , HttpStatus.NOT_FOUND),
     BRAND_NOT_EXIST(20001, "Brand khong ton tai" , HttpStatus.NOT_FOUND),
     PRODUCT_NOT_EXIST(20002, "Product khong ton tai" , HttpStatus.NOT_FOUND),
